@@ -2,6 +2,16 @@
   "use strict";
 
   var CATEGORIES = ["Déjeuner","Entrée","Plat principal","Dessert","Pâtisserie","Boisson","Autre"];
+  var CATEGORY_COLORS = {
+    "Déjeuner": "#c98a3a",
+    "Entrée": "#5c8a6e",
+    "Plat principal": "#3d5a44",
+    "Dessert": "#b3496b",
+    "Pâtisserie": "#a9762f",
+    "Boisson": "#3f7f8c",
+    "Autre": "#7a7360"
+  };
+  function categoryColor(cat){ return CATEGORY_COLORS[cat] || CATEGORY_COLORS["Autre"]; }
   var TAB_ALL = "Tous";
   var ICON_CLOCK = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.2 3.2"/></svg>';
   var ICON_PLATE = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.6"/></svg>';
@@ -176,6 +186,7 @@
       card.addEventListener("keydown", function(e){
         if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDetail(r.id); }
       });
+      card.style.setProperty("--cat-color", categoryColor(r.category));
       var favBtn = card.querySelector("[data-fav]");
       favBtn.addEventListener("click", function(e){ e.stopPropagation(); toggleFavorite(r.id); });
       els.grid.appendChild(card);
@@ -229,7 +240,7 @@
     if (!r) return;
     var photoBlock = r.photo_url ? '<img class="detail-photo" src="' + esc(r.photo_url) + '" alt="">' : "";
 
-    var ingHtml = (r.ingredients||[]).map(function(i){ return "<li>" + esc(i) + "</li>"; }).join("");
+    var ingHtml = (r.ingredients||[]).map(function(i,idx){ return '<li><label class="ing-check"><input type="checkbox" data-ing-idx="' + idx + '"><span>' + esc(i) + '</span></label></li>'; }).join("");
     var stepHtml = (r.steps||[]).map(function(s){ return "<li>" + esc(s) + "</li>"; }).join("");
 
     var sourceHtml = r.source_url
@@ -352,6 +363,77 @@
 
   /* ---------------- mode cuisine ---------------- */
   var cookState = { recipe: null, index: 0 };
+  var cookTimer = { remaining: 0, intervalId: null };
+
+  function formatTimer(s){
+    s = Math.max(0, s);
+    var m = Math.floor(s / 60), sec = s % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (sec < 10 ? "0" : "") + sec;
+  }
+  function updateTimerDisplay(){
+    var d = els.cookSheet.querySelector("#cookTimerDisplay");
+    if (d) d.textContent = formatTimer(cookTimer.remaining);
+    d && d.classList.toggle("done", cookTimer.remaining === 0 && cookTimer.wasStarted);
+  }
+  function playTimerSound(){
+    try{
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.3, 0.6].forEach(function(delay){
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.frequency.value = 880;
+        g.gain.setValueAtTime(0.25, ctx.currentTime + delay);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.25);
+        o.start(ctx.currentTime + delay);
+        o.stop(ctx.currentTime + delay + 0.26);
+      });
+    } catch(e){}
+  }
+  function setTimerToggleLabel(){
+    var btn = els.cookSheet.querySelector("[data-timer-toggle]");
+    if (btn) btn.textContent = cookTimer.intervalId ? "⏸ Pause" : "▶ Démarrer";
+  }
+  function toggleCookTimer(){
+    if (cookTimer.intervalId){
+      clearInterval(cookTimer.intervalId);
+      cookTimer.intervalId = null;
+    } else {
+      if (cookTimer.remaining <= 0) return;
+      cookTimer.wasStarted = true;
+      cookTimer.intervalId = setInterval(function(){
+        cookTimer.remaining--;
+        updateTimerDisplay();
+        if (cookTimer.remaining <= 0){
+          clearInterval(cookTimer.intervalId);
+          cookTimer.intervalId = null;
+          setTimerToggleLabel();
+          playTimerSound();
+          toast("⏰ Minuteur terminé !");
+        }
+      }, 1000);
+    }
+    setTimerToggleLabel();
+  }
+  function resetCookTimer(){
+    clearInterval(cookTimer.intervalId);
+    cookTimer.intervalId = null;
+    cookTimer.remaining = 0;
+    cookTimer.wasStarted = false;
+    updateTimerDisplay();
+    setTimerToggleLabel();
+  }
+  function wireCookTimer(){
+    els.cookSheet.querySelectorAll("[data-timer-add]").forEach(function(b){
+      b.addEventListener("click", function(){
+        cookTimer.remaining += Number(b.getAttribute("data-timer-add"));
+        updateTimerDisplay();
+      });
+    });
+    var toggleBtn = els.cookSheet.querySelector("[data-timer-toggle]");
+    if (toggleBtn) toggleBtn.addEventListener("click", toggleCookTimer);
+    var resetBtn = els.cookSheet.querySelector("[data-timer-reset]");
+    if (resetBtn) resetBtn.addEventListener("click", resetCookTimer);
+  }
 
   function renderCook(){
     var r = cookState.recipe;
@@ -366,6 +448,15 @@
       '</div>' +
       '<div class="cook-progress">Étape ' + (i + 1) + ' / ' + total + '</div>' +
       '<div class="cook-step">' + esc(steps[i] || "") + '</div>' +
+      '<div class="cook-timer">' +
+        '<span class="cook-timer-display" id="cookTimerDisplay">' + formatTimer(cookTimer.remaining) + '</span>' +
+        '<div class="cook-timer-controls">' +
+          '<button class="btn" data-timer-add="60" type="button">+1 min</button>' +
+          '<button class="btn" data-timer-add="300" type="button">+5 min</button>' +
+          '<button class="btn btn-primary" data-timer-toggle type="button">' + (cookTimer.intervalId ? "⏸ Pause" : "▶ Démarrer") + '</button>' +
+          '<button class="btn" data-timer-reset type="button">↺</button>' +
+        '</div>' +
+      '</div>' +
       '<div class="cook-nav">' +
         '<button class="btn" data-cook-prev type="button"' + (i === 0 ? ' disabled' : '') + '>← Précédent</button>' +
         (i < total - 1
@@ -374,6 +465,7 @@
       '</div>';
 
     els.cookSheet.querySelector("[data-cook-close]").addEventListener("click", closeCookMode);
+    wireCookTimer();
     var prevBtn = els.cookSheet.querySelector("[data-cook-prev]");
     if (prevBtn) prevBtn.addEventListener("click", function(){ if (cookState.index > 0){ cookState.index--; renderCook(); } });
     var nextBtn = els.cookSheet.querySelector("[data-cook-next]");
@@ -1088,6 +1180,7 @@
         '</div>';
       card.addEventListener("click", function(){ openDiscoverDetail(r.id); });
       card.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDiscoverDetail(r.id); } });
+      card.style.setProperty("--cat-color", categoryColor(r.category));
       els.discoverGrid.appendChild(card);
     });
   }
@@ -1127,7 +1220,7 @@
     var r = findDiscoverRecipe(id);
     if (!r) return;
     var photoBlock = r.photo_url ? '<img class="detail-photo" src="' + esc(r.photo_url) + '" alt="">' : "";
-    var ingHtml = (r.ingredients||[]).map(function(i){ return "<li>" + esc(i) + "</li>"; }).join("");
+    var ingHtml = (r.ingredients||[]).map(function(i,idx){ return '<li><label class="ing-check"><input type="checkbox" data-ing-idx="' + idx + '"><span>' + esc(i) + '</span></label></li>'; }).join("");
     var stepHtml = (r.steps||[]).map(function(s){ return "<li>" + esc(s) + "</li>"; }).join("");
     var famName = r.families ? r.families.name : "une autre famille";
     var tagsHtml = (r.tags && r.tags.length)
