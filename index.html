@@ -160,8 +160,16 @@
       </div>
 
       <div class="field">
-        <label for="f-source">Lien de la recette originale <span class="hint">(facultatif) — si elle vient d'un autre site</span></label>
-        <input type="url" id="f-source" placeholder="https://...">
+        <label for="f-source">Provenance de la recette</label>
+        <input type="text" id="f-source" required placeholder="Ex. https://... , ou « Livre de recettes de mémé », « Recette personnelle »">
+      </div>
+
+      <div class="field">
+        <label for="f-visibility">Visibilité</label>
+        <select id="f-visibility">
+          <option value="private">🔒 Privée — visible seulement par ma famille</option>
+          <option value="public">🌐 Publique — visible par toutes les familles dans Découvrir</option>
+        </select>
       </div>
 
       <div class="form-actions">

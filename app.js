@@ -25,7 +25,7 @@
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
    "familyBadgeBtn","familyOnboardingOverlay","famTabCreate","famTabJoin","famError",
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
-   "familyInfoOverlay","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState"
+   "familyInfoOverlay","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -233,7 +233,9 @@
     var stepHtml = (r.steps||[]).map(function(s){ return "<li>" + esc(s) + "</li>"; }).join("");
 
     var sourceHtml = r.source_url
-      ? '<p class="detail-source">Recette originale : <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.source_url) + ' ↗</a></p>'
+      ? (/^https?:\/\//i.test(r.source_url)
+          ? '<p class="detail-source">Provenance : <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.source_url) + ' ↗</a></p>'
+          : '<p class="detail-source">Provenance : ' + esc(r.source_url) + '</p>')
       : '';
 
     var isPublic = r.visibility === "public";
@@ -443,6 +445,7 @@
       els["f-story"].value = existing.story || "";
       els["f-tags"].value = (existing.tags||[]).join(", ");
       els["f-source"].value = existing.source_url || "";
+      els["f-visibility"].value = existing.visibility || "private";
       if (existing.photo_url){
         els.photoThumb.src = existing.photo_url;
         els.photoThumb.hidden = false;
@@ -452,6 +455,7 @@
     } else {
       els.formHeading.textContent = "Ajouter une recette";
       els.formSubmit.textContent = "Enregistrer la recette";
+      els["f-visibility"].value = "private";
       if (!els["f-author"].value) els["f-author"].value = displayName(state.session);
     }
     els.formOverlay.hidden = false;
@@ -517,7 +521,12 @@
     var title = els["f-title"].value.trim();
     var ingredients = els["f-ingredients"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
     var steps = els["f-steps"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
+    var sourceVal = els["f-source"].value.trim();
     if (!title || !ingredients.length || !steps.length) return;
+    if (!sourceVal){
+      showFormError("Indique la provenance de la recette (un lien, ou une description comme « Recette personnelle »).");
+      return;
+    }
 
     var data = {
       title: title,
@@ -530,7 +539,8 @@
       author: els["f-author"].value.trim() || null,
       story: els["f-story"].value.trim() || null,
       tags: els["f-tags"].value.split(",").map(function(s){ return s.trim(); }).filter(Boolean),
-      source_url: els["f-source"].value.trim() || null,
+      source_url: sourceVal,
+      visibility: els["f-visibility"].value,
       family_id: state.familyId
     };
 
@@ -1123,6 +1133,11 @@
     var tagsHtml = (r.tags && r.tags.length)
       ? '<div class="detail-tags">' + r.tags.map(function(t){ return '<span class="tag-pill">' + esc(t) + '</span>'; }).join("") + '</div>'
       : '';
+    var sourceHtml = r.source_url
+      ? (/^https?:\/\//i.test(r.source_url)
+          ? '<p class="detail-source">Provenance : <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.source_url) + ' ↗</a></p>'
+          : '<p class="detail-source">Provenance : ' + esc(r.source_url) + '</p>')
+      : '';
 
     els.detailSheet.innerHTML =
       photoBlock +
@@ -1144,6 +1159,7 @@
           '<div><p class="detail-h">Ingrédients</p><ul class="ing-list">' + ingHtml + '</ul></div>' +
           '<div><p class="detail-h">Étapes</p><ol class="step-list">' + stepHtml + '</ol></div>' +
         '</div>' +
+        sourceHtml +
         '<div class="detail-actions"><button class="btn btn-primary" data-copy type="button">📋 Copier dans mon carnet</button></div>' +
       '</div>';
 
