@@ -25,11 +25,12 @@
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
    "familyBadgeBtn","familyOnboardingOverlay","famTabCreate","famTabJoin","famError",
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
-   "familyInfoOverlay","famInfoClose","famInviteCodeBox"
+   "familyInfoOverlay","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
     recipes: [],
+    discoverRecipes: [],
     blogPosts: [],
     view: "recipes",
     session: null,
@@ -235,12 +236,17 @@
       ? '<p class="detail-source">Recette originale : <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.source_url) + ' ↗</a></p>'
       : '';
 
+    var isPublic = r.visibility === "public";
     var actionsHtml = state.session
       ? '<div class="detail-actions">' +
           '<button class="btn" data-edit type="button">Modifier</button>' +
+          '<button class="btn" data-toggle-visibility type="button">' + (isPublic ? "🔒 Rendre privée" : "🌐 Rendre publique") + '</button>' +
           '<button class="btn btn-danger" data-delete type="button">Supprimer</button>' +
         '</div>'
       : '<p class="signed-out-note">Connecte-toi pour modifier ou supprimer cette recette.</p>';
+    var visibilityNote = isPublic
+      ? '<p class="detail-visibility-note">🌐 Cette recette est visible par toutes les familles dans l\'onglet Découvrir.</p>'
+      : '';
 
     var tagsHtml = (r.tags && r.tags.length)
       ? '<div class="detail-tags">' + r.tags.map(function(t){ return '<span class="tag-pill">' + esc(t) + '</span>'; }).join("") + '</div>'
@@ -269,6 +275,7 @@
           '<div><p class="detail-h">Étapes</p><ol class="step-list">' + stepHtml + '</ol></div>' +
         '</div>' +
         sourceHtml +
+        visibilityNote +
         actionsHtml +
       '</div>';
 
@@ -277,7 +284,17 @@
     els.detailSheet.querySelector("[data-cook]").addEventListener("click", function(){ openCookMode(r); });
     var editBtn = els.detailSheet.querySelector("[data-edit]");
     var delBtn = els.detailSheet.querySelector("[data-delete]");
+    var visBtn = els.detailSheet.querySelector("[data-toggle-visibility]");
     if (editBtn) editBtn.addEventListener("click", function(){ closeDetail(); openForm(r); });
+    if (visBtn) visBtn.addEventListener("click", function(){
+      if (!supabase) return;
+      var newVisibility = isPublic ? "private" : "public";
+      supabase.from("recipes").update({ visibility: newVisibility }).eq("id", r.id).then(function(res){
+        if (res.error){ toast("Impossible de changer la visibilité — " + res.error.message); return; }
+        toast(newVisibility === "public" ? "Recette rendue publique." : "Recette rendue privée.");
+        closeDetail();
+      });
+    });
     if (delBtn) delBtn.addEventListener("click", function(){
       state.deleteTargetId = r.id;
       els.confirmOverlay.hidden = false;
@@ -553,23 +570,53 @@
   });
 
   /* ---------------- importer une recette (texte collé) ---------------- */
+  var IMPORT_VERB_START = /^(pr[ée]chauffer|m[ée]langer|incorporer|ajouter|verser|couper|trancher|cuire|chauffer|laisser|r[ée]server|servir|assaisonner|badigeonner|saupoudrer|d[ée]poser|placer|diviser|rouler|former|presser|retirer|couvrir|r[ée]duire|augmenter|refroidir|reposer|p[ée]trir|transf[ée]rer|continuer|r[ée]p[ée]ter|pr[ée]parer|faire|griller|fouetter|battre|\u00e9taler|d[ée]couper|napper|garnir|disposer|preheat|mix|combine|add|stir|whisk|roll|shape|press|sprinkle|place|allow|cook|serve|season|cut|slice|pour|heat|let|continue|repeat|transfer|return|remove|cover|reduce|increase|chill|rest|knead|divide|form|brush|bake|bring|simmer|garnish|top|drizzle|spread|arrange|toss|fold|beat|whip|melt|dice|chop|grate|peel|marinate|refrigerate|freeze|drain|rinse)\b/i;
+  var IMPORT_UNIT_WORD = /\b(g|kg|ml|l|cup|cups|tsp|tbsp|teaspoon|tablespoon|oz|ounce|ounces|lb|lbs|pound|pounds|clove|cloves|tasse|tasses|cuill[èe]re[s]?|gramme[s]?|paquet|paquets|pinc[ée]e?|tranche[s]?|gousse[s]?)\b/i;
+  var IMPORT_QTY_START = /^[\d½¼¾⅓⅔⅛]/;
+  var IMPORT_HEADER_ING = /^(ingr[ée]dients?|ingredients?)\s*:?$/i;
+  var IMPORT_HEADER_STEPS = /^([ée]tapes?|instructions?|pr[ée]paration|m[ée]thode|directions?|steps?)\s*:?$/i;
+
+  function importLooksLikeIngredient(line){
+    if (IMPORT_VERB_START.test(line)) return false;
+    if (IMPORT_QTY_START.test(line)) return true;
+    if (IMPORT_UNIT_WORD.test(line) && line.length < 90) return true;
+    if (!/[.!?]\s*$/.test(line) && line.length < 60) return true;
+    return false;
+  }
+  function importSplitIngredientLine(line){
+    if (line.indexOf(",") === -1) return [line];
+    var parts = line.split(",").map(function(p){ return p.trim(); }).filter(Boolean);
+    if (parts.length < 2) return [line];
+    var allLook = parts.every(function(p){ return IMPORT_QTY_START.test(p) || IMPORT_UNIT_WORD.test(p); });
+    return allLook ? parts : [line];
+  }
+
   function parseRecipeText(text){
-    var lines = text.split(/\r?\n/).map(function(l){ return l.trim(); });
-    var title = "";
+    var lines = text.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+    if (!lines.length) return { title: "", ingredients: [], steps: [] };
+
+    var hasHeaders = lines.some(function(l){ return IMPORT_HEADER_ING.test(l) || IMPORT_HEADER_STEPS.test(l); });
+    var title = lines[0].replace(/^#+\s*/, "");
+    var body = lines.slice(1);
     var ingredients = [];
     var steps = [];
     var section = null;
-    lines.forEach(function(line){
-      if (!line) return;
-      var lower = line.toLowerCase();
-      if (/ingr[ée]dients?\s*:?$/.test(lower)){ section = "ing"; return; }
-      if (/[ée]tapes?|instructions?|pr[ée]paration|m[ée]thode/.test(lower) && lower.length < 40){ section = "steps"; return; }
-      if (!title && !section){ title = line.replace(/^#+\s*/, ""); return; }
-      var cleaned = line.replace(/^[-*•]+\s*/, "").replace(/^\d+[.)]\s*/, "");
-      if (section === "ing") ingredients.push(cleaned);
-      else if (section === "steps") steps.push(cleaned);
-      else ingredients.push(cleaned);
+
+    body.forEach(function(raw){
+      if (IMPORT_HEADER_ING.test(raw)){ section = "ing"; return; }
+      if (IMPORT_HEADER_STEPS.test(raw)){ section = "steps"; return; }
+
+      var isNumberedStep = /^\d+[.)]\s+(?=[A-Za-zÀ-ÿ])/.test(raw);
+      var cleaned = raw.replace(/^[-*•]+\s*/, "").replace(/^\d+[.)]\s+/, "");
+
+      if (isNumberedStep){ steps.push(cleaned); return; }
+      if (hasHeaders && section === "ing"){ importSplitIngredientLine(cleaned).forEach(function(x){ ingredients.push(x); }); return; }
+      if (hasHeaders && section === "steps"){ steps.push(cleaned); return; }
+
+      if (importLooksLikeIngredient(cleaned)) importSplitIngredientLine(cleaned).forEach(function(x){ ingredients.push(x); });
+      else steps.push(cleaned);
     });
+
     return { title: title, ingredients: ingredients, steps: steps };
   }
 
@@ -603,22 +650,33 @@
   function switchView(view){
     state.view = view;
     var recipeMode = view === "recipes";
+    var discoverMode = view === "discover";
+    var blogMode = view === "blog";
     els.viewSwitch.querySelectorAll(".view-btn").forEach(function(b){
       b.classList.toggle("active", b.getAttribute("data-view") === view);
     });
     els.tabs.style.display = recipeMode ? "" : "none";
     els.favToggleBtn.style.display = recipeMode ? "" : "none";
     els.importBtn.style.display = recipeMode ? "" : "none";
-    els.searchInput.parentNode.style.display = recipeMode ? "" : "none";
+    els.searchInput.parentNode.style.display = (recipeMode || discoverMode) ? "" : "none";
+
     els.grid.hidden = !recipeMode;
     els.emptyState.hidden = recipeMode ? els.emptyState.hidden : true;
     els.featuredSection.hidden = recipeMode ? els.featuredSection.hidden : true;
-    els.blogList.hidden = recipeMode;
-    els.blogEmptyState.hidden = recipeMode || !!state.blogPosts.length;
-    els.addBtn.innerHTML = recipeMode
-      ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Ajouter une recette'
-      : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Nouvel article';
+
+    els.discoverGrid.hidden = !discoverMode;
+    els.discoverEmptyState.hidden = discoverMode ? !!state.discoverRecipes.length : true;
+
+    els.blogList.hidden = !blogMode;
+    els.blogEmptyState.hidden = blogMode ? !!state.blogPosts.length : true;
+
+    els.addBtn.hidden = discoverMode;
+    els.addBtn.innerHTML = blogMode
+      ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Nouvel article'
+      : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Ajouter une recette';
+
     if (recipeMode){ renderGrid(); renderFeatured(); }
+    else if (discoverMode){ renderDiscoverGrid(); loadDiscoverRecipes(); }
     else { renderBlogList(); loadBlogPosts(); }
   }
   els.viewSwitch.querySelectorAll(".view-btn").forEach(function(b){
@@ -626,7 +684,7 @@
   });
 
   els.addBtn.addEventListener("click", function(){
-    if (state.view === "recipes") openForm(null); else openBlogForm(null);
+    if (state.view === "blog") openBlogForm(null); else if (state.view === "recipes") openForm(null);
   }, true);
 
   function excerpt(text, n){
@@ -932,6 +990,7 @@
     renderFamilyBadge();
     els.familyOnboardingOverlay.hidden = true;
     loadRecipes();
+    loadDiscoverRecipes();
     loadBlogPosts();
     loadFavorites();
   }
@@ -989,6 +1048,110 @@
     });
   }
 
+  /* ================= DÉCOUVRIR (recettes publiques) ================= */
+
+  function renderDiscoverGrid(){
+    els.discoverGrid.innerHTML = "";
+    if (!state.discoverRecipes.length){
+      els.discoverEmptyState.hidden = false;
+      return;
+    }
+    els.discoverEmptyState.hidden = true;
+    state.discoverRecipes.forEach(function(r){
+      var card = document.createElement("div");
+      card.className = "card";
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+      var photoHtml = r.photo_url
+        ? '<img src="' + esc(r.photo_url) + '" alt="" loading="lazy">'
+        : '<span class="ph-fallback">' + esc(initialsWord(r.title)) + '</span>';
+      var famName = r.families ? r.families.name : "Famille inconnue";
+      card.innerHTML =
+        '<div class="card-photo">' + photoHtml + '</div>' +
+        '<div class="card-body">' +
+          '<p class="card-cat">' + esc(r.category || "Autre") + ' · 👪 ' + esc(famName) + '</p>' +
+          '<h3 class="card-title">' + esc(r.title) + '</h3>' +
+          '<div class="card-meta">' +
+            (r.prep_min || r.cook_min ? '<span>' + ICON_CLOCK + ' ' + ((num(r.prep_min)+num(r.cook_min)) || "–") + ' min</span>' : '') +
+            (r.servings ? '<span>' + ICON_PLATE + ' ' + num(r.servings) + '</span>' : '') +
+          '</div>' +
+        '</div>';
+      card.addEventListener("click", function(){ openDiscoverDetail(r.id); });
+      card.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDiscoverDetail(r.id); } });
+      els.discoverGrid.appendChild(card);
+    });
+  }
+
+  function findDiscoverRecipe(id){
+    return state.discoverRecipes.filter(function(r){ return r.id === id; })[0];
+  }
+
+  function copyRecipeToMyFamily(r){
+    if (!supabase || !state.familyId) return;
+    var data = {
+      title: r.title,
+      category: r.category,
+      prep_min: r.prep_min,
+      cook_min: r.cook_min,
+      servings: r.servings,
+      ingredients: r.ingredients,
+      steps: r.steps,
+      photo_url: r.photo_url,
+      author: null,
+      story: r.story,
+      tags: r.tags,
+      source_url: r.source_url,
+      family_id: state.familyId,
+      visibility: "private",
+      copied_from: r.families ? r.families.name : null
+    };
+    supabase.from("recipes").insert(data).then(function(res){
+      if (res.error){ toast("La copie a échoué — " + res.error.message); return; }
+      closeDetail();
+      switchView("recipes");
+      toast("Recette copiée dans ton carnet !");
+    });
+  }
+
+  function openDiscoverDetail(id){
+    var r = findDiscoverRecipe(id);
+    if (!r) return;
+    var photoBlock = r.photo_url ? '<img class="detail-photo" src="' + esc(r.photo_url) + '" alt="">' : "";
+    var ingHtml = (r.ingredients||[]).map(function(i){ return "<li>" + esc(i) + "</li>"; }).join("");
+    var stepHtml = (r.steps||[]).map(function(s){ return "<li>" + esc(s) + "</li>"; }).join("");
+    var famName = r.families ? r.families.name : "une autre famille";
+    var tagsHtml = (r.tags && r.tags.length)
+      ? '<div class="detail-tags">' + r.tags.map(function(t){ return '<span class="tag-pill">' + esc(t) + '</span>'; }).join("") + '</div>'
+      : '';
+
+    els.detailSheet.innerHTML =
+      photoBlock +
+      '<div class="sheet-head" style="padding-top:' + (r.photo_url ? '14px' : '20px') + ';">' +
+        '<div></div>' +
+        '<button class="sheet-close" data-close type="button">&times;</button>' +
+      '</div>' +
+      '<div class="detail-body">' +
+        '<p class="detail-cat">' + esc(r.category || "Autre") + ' · 👪 Recette de ' + esc(famName) + '</p>' +
+        '<h2 class="detail-title display">' + esc(r.title) + '</h2>' +
+        (r.story ? '<p class="detail-story">' + esc(r.story) + '</p>' : '') +
+        tagsHtml +
+        '<div class="detail-stats">' +
+          (r.prep_min ? '<div class="stat"><span class="num mono">' + num(r.prep_min) + ' min</span><span class="lbl">Préparation</span></div>' : '') +
+          (r.cook_min ? '<div class="stat"><span class="num mono">' + num(r.cook_min) + ' min</span><span class="lbl">Cuisson</span></div>' : '') +
+          (r.servings ? '<div class="stat"><span class="num mono">' + num(r.servings) + '</span><span class="lbl">Portions</span></div>' : '') +
+        '</div>' +
+        '<div class="detail-cols">' +
+          '<div><p class="detail-h">Ingrédients</p><ul class="ing-list">' + ingHtml + '</ul></div>' +
+          '<div><p class="detail-h">Étapes</p><ol class="step-list">' + stepHtml + '</ol></div>' +
+        '</div>' +
+        '<div class="detail-actions"><button class="btn btn-primary" data-copy type="button">📋 Copier dans mon carnet</button></div>' +
+      '</div>';
+
+    els.detailSheet.querySelector("[data-close]").addEventListener("click", closeDetail);
+    els.detailSheet.querySelector("[data-copy]").addEventListener("click", function(){ copyRecipeToMyFamily(r); });
+    els.detailOverlay.hidden = false;
+  }
+
   /* ---------------- data wiring ---------------- */
   function sortByDate(list){
     return list.slice().sort(function(a,b){
@@ -997,12 +1160,21 @@
   }
 
   function loadRecipes(){
-    if (!supabase) return;
-    supabase.from("recipes").select("*").then(function(res){
+    if (!supabase || !state.familyId) return;
+    supabase.from("recipes").select("*").eq("family_id", state.familyId).then(function(res){
       if (res.error){ toast("Impossible de charger les recettes — " + res.error.message); return; }
       state.recipes = sortByDate(res.data || []);
       renderGrid();
       renderFeatured();
+    });
+  }
+
+  function loadDiscoverRecipes(){
+    if (!supabase || !state.familyId) return;
+    supabase.from("recipes").select("*, families(name)").eq("visibility", "public").neq("family_id", state.familyId).then(function(res){
+      if (res.error){ toast("Impossible de charger Découvrir — " + res.error.message); return; }
+      state.discoverRecipes = sortByDate(res.data || []);
+      if (state.view === "discover") renderDiscoverGrid();
     });
   }
 
@@ -1011,6 +1183,7 @@
     supabase.channel("recipes-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "recipes" }, function(){
         loadRecipes();
+        loadDiscoverRecipes();
       })
       .subscribe();
     supabase.channel("blog-changes")

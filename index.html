@@ -37,8 +37,9 @@
 
 <div class="controls-wrap">
   <div class="view-switch" id="viewSwitch">
-    <button class="view-btn active" data-view="recipes" type="button">🍽️ Recettes</button>
-    <button class="view-btn" data-view="blog" type="button">📰 Blogue nutrition</button>
+    <button class="view-btn active" data-view="recipes" type="button">🍽️ Mes recettes</button>
+    <button class="view-btn" data-view="discover" type="button">🌐 Découvrir</button>
+    <button class="view-btn" data-view="blog" type="button">📰 Blogue</button>
   </div>
   <div class="controls">
     <div class="tabs" id="tabs"></div>
@@ -64,6 +65,12 @@
   <div class="empty-state" id="blogEmptyState" hidden>
     <p class="display">Le blogue est vide</p>
     <p>Publiez le tout premier article avec le bouton en bas à droite.</p>
+  </div>
+
+  <div class="grid" id="discoverGrid" hidden></div>
+  <div class="empty-state" id="discoverEmptyState" hidden>
+    <p class="display">Rien à découvrir pour l'instant</p>
+    <p>Quand une famille rend une recette publique, elle apparaît ici pour tout le monde.</p>
   </div>
 </main>
 
