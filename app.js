@@ -31,7 +31,7 @@
    "authNameField","a-name","a-email","a-password","authSubmit","authHint","authTabLogin","authTabSignup",
    "cookOverlay","cookSheet","viewSwitch","importBtn","importOverlay","importClose","importText","importSourceUrl","importCancel","importAnalyze",
    "blogList","blogEmptyState","blogFormOverlay","blogFormHeading","blogFormClose","blogForm","blogFormError",
-   "bf-title","bf-photo","bfPhotoDrop","bfPhotoThumb","bfPhotoIcon","bfPhotoTxt","bf-body","bf-author",
+   "bf-title","bf-photo","bfPhotoDrop","bfPhotoThumb","bfPhotoIcon","bfPhotoTxt","bf-body","bf-author","bf-source",
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
    "familyBadgeBtn","familyOnboardingOverlay","famTabCreate","famTabJoin","famError",
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
@@ -59,7 +59,8 @@
     familyName: "",
     familyInviteCode: "",
     isAdminFamily: false,
-    famOnboardMode: "create"
+    famOnboardMode: "create",
+    openRecipeId: null
   };
 
   var supabase = null;
@@ -291,6 +292,7 @@
         sourceHtml +
         visibilityNote +
         actionsHtml +
+        commentsBlockHtml() +
       '</div>';
 
     els.detailSheet.querySelector("[data-close]").addEventListener("click", closeDetail);
@@ -313,10 +315,13 @@
       state.deleteTargetId = r.id;
       els.confirmOverlay.hidden = false;
     });
+    renderComments(r.id);
+    wireCommentForm(r.id);
 
     els.detailOverlay.hidden = false;
+    state.openRecipeId = r.id;
   }
-  function closeDetail(){ els.detailOverlay.hidden = true; els.detailSheet.innerHTML = ""; }
+  function closeDetail(){ els.detailOverlay.hidden = true; els.detailSheet.innerHTML = ""; state.openRecipeId = null; }
   els.detailOverlay.addEventListener("click", function(e){ if (e.target === els.detailOverlay) closeDetail(); });
 
   /* ---------------- favoris ---------------- */
@@ -359,6 +364,54 @@
         renderFeatured();
         toast("Le favori n'a pas pu être sauvegardé.");
       }
+    });
+  }
+
+  /* ---------------- commentaires ---------------- */
+  function commentsBlockHtml(){
+    return '<div class="comments-section">' +
+      '<p class="detail-h">Commentaires</p>' +
+      '<div class="comments-list" id="commentsList"><p class="hint">Chargement…</p></div>' +
+      (state.session
+        ? '<form class="comment-form" id="commentForm"><textarea id="commentText" placeholder="Écris un commentaire…" required></textarea><button type="submit" class="btn btn-primary">Publier</button></form>'
+        : '<p class="hint">Connecte-toi pour laisser un commentaire.</p>') +
+    '</div>';
+  }
+
+  function renderComments(recipeId){
+    if (!supabase) return;
+    supabase.from("comments").select("*").eq("recipe_id", recipeId).order("created_at", { ascending: true }).then(function(res){
+      var listEl = els.detailSheet.querySelector("#commentsList");
+      if (!listEl) return;
+      if (res.error){ listEl.innerHTML = '<p class="hint">Impossible de charger les commentaires.</p>'; return; }
+      var rows = res.data || [];
+      listEl.innerHTML = rows.length
+        ? rows.map(function(c){
+            return '<div class="comment-item"><p class="comment-author">' + esc(c.author || "Anonyme") + '</p><p class="comment-body">' + esc(c.body) + '</p></div>';
+          }).join("")
+        : '<p class="hint">Aucun commentaire pour l\'instant — sois le premier !</p>';
+    });
+  }
+
+  function wireCommentForm(recipeId){
+    var form = els.detailSheet.querySelector("#commentForm");
+    if (!form) return;
+    form.addEventListener("submit", function(e){
+      e.preventDefault();
+      if (!supabase || !state.session) return;
+      var textEl = els.detailSheet.querySelector("#commentText");
+      var body = textEl.value.trim();
+      if (!body) return;
+      supabase.from("comments").insert({
+        recipe_id: recipeId,
+        user_id: state.session.user.id,
+        author: displayName(state.session),
+        body: body
+      }).then(function(res){
+        if (res.error){ toast("Le commentaire n'a pas pu être publié — " + res.error.message); return; }
+        textEl.value = "";
+        renderComments(recipeId);
+      });
     });
   }
 
@@ -839,6 +892,11 @@
           '<button class="btn btn-danger" data-blog-delete type="button">Supprimer</button>' +
         '</div>'
       : '';
+    var blogSourceHtml = p.source_url
+      ? (/^https?:\/\//i.test(p.source_url)
+          ? '<p class="detail-source">Source : <a href="' + esc(p.source_url) + '" target="_blank" rel="noopener noreferrer">' + esc(p.source_url) + ' ↗</a></p>'
+          : '<p class="detail-source">Source : ' + esc(p.source_url) + '</p>')
+      : '';
     els.blogDetailSheet.innerHTML =
       photoBlock +
       '<div class="sheet-head" style="padding-top:' + (p.cover_url ? '14px' : '20px') + ';">' +
@@ -850,6 +908,7 @@
         '<h1 class="blog-article-title display">' + esc(p.title) + '</h1>' +
         '<p class="blog-article-meta">' + (p.author ? "Par " + esc(p.author) : "") + '</p>' +
         '<div class="blog-article-text">' + bodyHtml + '</div>' +
+        blogSourceHtml +
         actionsHtml +
       '</div>';
     els.blogDetailSheet.querySelector("[data-close]").addEventListener("click", closeBlogDetail);
@@ -890,6 +949,7 @@
       els["bf-title"].value = existing.title || "";
       els["bf-body"].value = existing.body || "";
       els["bf-author"].value = existing.author || "";
+      els["bf-source"].value = existing.source_url || "";
       if (existing.cover_url){
         els.bfPhotoThumb.src = existing.cover_url;
         els.bfPhotoThumb.hidden = false;
@@ -934,6 +994,7 @@
       title: title,
       body: body,
       author: els["bf-author"].value.trim() || null,
+      source_url: els["bf-source"].value.trim() || null,
       family_id: state.familyId
     };
     els.blogFormSubmit.disabled = true;
@@ -1257,11 +1318,15 @@
         '</div>' +
         sourceHtml +
         '<div class="detail-actions"><button class="btn btn-primary" data-copy type="button">📋 Copier dans mon carnet</button></div>' +
+        commentsBlockHtml() +
       '</div>';
 
     els.detailSheet.querySelector("[data-close]").addEventListener("click", closeDetail);
     els.detailSheet.querySelector("[data-copy]").addEventListener("click", function(){ copyRecipeToMyFamily(r); });
+    renderComments(r.id);
+    wireCommentForm(r.id);
     els.detailOverlay.hidden = false;
+    state.openRecipeId = r.id;
   }
 
   /* ---------------- data wiring ---------------- */
@@ -1301,6 +1366,12 @@
     supabase.channel("blog-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "blog_posts" }, function(){
         loadBlogPosts();
+      })
+      .subscribe();
+    supabase.channel("comments-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, function(payload){
+        var rid = (payload.new && payload.new.recipe_id) || (payload.old && payload.old.recipe_id);
+        if (state.openRecipeId && rid === state.openRecipeId) renderComments(state.openRecipeId);
       })
       .subscribe();
   }

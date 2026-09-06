@@ -288,6 +288,15 @@ main{ max-width:1080px; margin:0 auto; padding:28px 24px 100px; }
 .detail-source a{ color:var(--ink-soft); text-decoration:underline; }
 .detail-visibility-note{ font-size:13px; color:var(--pine); background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:9px 12px; margin:0 0 4px; }
 
+.comments-section{ margin-top:26px; padding-top:20px; border-top:1px solid var(--line); }
+.comments-list{ display:flex; flex-direction:column; gap:12px; margin-bottom:16px; }
+.comment-item{ background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:10px 14px; }
+.comment-author{ margin:0 0 3px; font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600; color:var(--accent-deep); }
+.comment-body{ margin:0; font-size:14px; line-height:1.5; color:var(--ink); }
+.comment-form{ display:flex; gap:10px; align-items:flex-start; }
+.comment-form textarea{ flex:1; min-height:44px; resize:vertical; border:1px solid var(--line); border-radius:6px; padding:9px 11px; font-family:inherit; font-size:14px; background:var(--surface); color:var(--ink); }
+.comment-form .btn{ flex:none; }
+
 /* buttons */
 .btn{
   appearance:none; border:1px solid var(--line); background:var(--surface); color:var(--ink);
