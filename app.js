@@ -25,7 +25,7 @@
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
    "familyBadgeBtn","familyOnboardingOverlay","famTabCreate","famTabJoin","famError",
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
-   "familyInfoOverlay","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility"
+   "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
