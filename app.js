@@ -58,6 +58,7 @@
     familyId: null,
     familyName: "",
     familyInviteCode: "",
+    isAdminFamily: false,
     famOnboardMode: "create"
   };
 
@@ -772,7 +773,7 @@
     els.blogList.hidden = !blogMode;
     els.blogEmptyState.hidden = blogMode ? !!state.blogPosts.length : true;
 
-    els.addBtn.hidden = discoverMode;
+    els.addBtn.hidden = discoverMode || (blogMode && !state.isAdminFamily);
     els.addBtn.innerHTML = blogMode
       ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Nouvel article'
       : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Ajouter une recette';
@@ -832,7 +833,7 @@
     var photoBlock = p.cover_url ? '<img class="blog-article-photo" src="' + esc(p.cover_url) + '" alt="">' : "";
     var paragraphs = (p.body || "").split(/\n{2,}|\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
     var bodyHtml = paragraphs.map(function(par){ return "<p>" + esc(par) + "</p>"; }).join("");
-    var actionsHtml = state.session
+    var actionsHtml = state.isAdminFamily
       ? '<div class="blog-article-actions">' +
           '<button class="btn" data-blog-edit type="button">Modifier</button>' +
           '<button class="btn btn-danger" data-blog-delete type="button">Supprimer</button>' +
@@ -880,6 +881,7 @@
 
   function openBlogForm(existing){
     if (!state.session){ openAuth("login"); return; }
+    if (!state.isAdminFamily){ toast("Seule la famille Pageau peut publier sur le blogue."); return; }
     resetBlogForm();
     if (existing){
       state.editingBlogId = existing.id;
@@ -1085,10 +1087,11 @@
   els.famInfoClose.addEventListener("click", function(){ els.familyInfoOverlay.hidden = true; });
   els.familyInfoOverlay.addEventListener("click", function(e){ if (e.target === els.familyInfoOverlay) els.familyInfoOverlay.hidden = true; });
 
-  function enterFamily(id, name, code){
+  function enterFamily(id, name, code, isAdmin){
     state.familyId = id;
     state.familyName = name;
     state.familyInviteCode = code || state.familyInviteCode;
+    state.isAdminFamily = !!isAdmin;
     renderFamilyBadge();
     els.familyOnboardingOverlay.hidden = true;
     loadRecipes();
@@ -1135,7 +1138,7 @@
 
   function checkFamilyMembership(){
     if (!supabase || !state.session) return;
-    supabase.from("family_members").select("family_id, families(name, invite_code)").eq("user_id", state.session.user.id).then(function(res){
+    supabase.from("family_members").select("family_id, families(name, invite_code, is_admin_family)").eq("user_id", state.session.user.id).then(function(res){
       if (res.error) return;
       var rows = res.data || [];
       if (!rows.length){
@@ -1146,7 +1149,7 @@
         return;
       }
       var fam = rows[0].families;
-      enterFamily(rows[0].family_id, fam ? fam.name : "", fam ? fam.invite_code : "");
+      enterFamily(rows[0].family_id, fam ? fam.name : "", fam ? fam.invite_code : "", fam ? fam.is_admin_family : false);
     });
   }
 
