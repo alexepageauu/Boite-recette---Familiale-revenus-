@@ -488,7 +488,7 @@
   }
 
   /* ---------------- mode cuisine ---------------- */
-  var cookState = { recipe: null, index: 0 };
+  var cookState = { recipe: null, index: 0, checkedIng: {} };
   var cookTimer = { remaining: 0, intervalId: null };
 
   function formatTimer(s){
@@ -561,6 +561,26 @@
     if (resetBtn) resetBtn.addEventListener("click", resetCookTimer);
   }
 
+  function cookIngredientsHtml(){
+    var r = cookState.recipe;
+    var ingredients = (r && r.ingredients) || [];
+    var itemsHtml = ingredients.map(function(ing, idx){
+      var checked = !!cookState.checkedIng[idx];
+      return '<li><label class="ing-check"><input type="checkbox" data-cook-ing-idx="' + idx + '"' + (checked ? ' checked' : '') + '><span>' + esc(ing) + '</span></label></li>';
+    }).join("");
+    return '<div class="cook-ingredients">' +
+      '<p class="cook-ingredients-title">🧺 Ingrédients</p>' +
+      '<ul class="ing-list">' + itemsHtml + '</ul>' +
+    '</div>';
+  }
+  function wireCookIngredients(){
+    els.cookSheet.querySelectorAll("[data-cook-ing-idx]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        cookState.checkedIng[cb.getAttribute("data-cook-ing-idx")] = cb.checked;
+      });
+    });
+  }
+
   function renderCook(){
     var r = cookState.recipe;
     if (!r) return;
@@ -568,30 +588,36 @@
     var i = cookState.index;
     var total = steps.length;
     els.cookSheet.innerHTML =
-      '<div class="cook-head">' +
-        '<span class="cook-title">' + esc(r.title) + '</span>' +
-        '<button class="sheet-close" data-cook-close type="button">&times;</button>' +
-      '</div>' +
-      '<div class="cook-progress">Étape ' + (i + 1) + ' / ' + total + '</div>' +
-      '<div class="cook-step">' + esc(steps[i] || "") + '</div>' +
-      '<div class="cook-timer">' +
-        '<span class="cook-timer-display" id="cookTimerDisplay">' + formatTimer(cookTimer.remaining) + '</span>' +
-        '<div class="cook-timer-controls">' +
-          '<button class="btn" data-timer-add="60" type="button">+1 min</button>' +
-          '<button class="btn" data-timer-add="300" type="button">+5 min</button>' +
-          '<button class="btn btn-primary" data-timer-toggle type="button">' + (cookTimer.intervalId ? "⏸ Pause" : "▶ Démarrer") + '</button>' +
-          '<button class="btn" data-timer-reset type="button">↺</button>' +
+      '<div class="cook-layout">' +
+        cookIngredientsHtml() +
+        '<div class="cook-main">' +
+          '<div class="cook-head">' +
+            '<span class="cook-title">' + esc(r.title) + '</span>' +
+            '<button class="sheet-close" data-cook-close type="button">&times;</button>' +
+          '</div>' +
+          '<div class="cook-progress">Étape ' + (i + 1) + ' / ' + total + '</div>' +
+          '<div class="cook-step">' + esc(steps[i] || "") + '</div>' +
+          '<div class="cook-timer">' +
+            '<span class="cook-timer-display" id="cookTimerDisplay">' + formatTimer(cookTimer.remaining) + '</span>' +
+            '<div class="cook-timer-controls">' +
+              '<button class="btn" data-timer-add="60" type="button">+1 min</button>' +
+              '<button class="btn" data-timer-add="300" type="button">+5 min</button>' +
+              '<button class="btn btn-primary" data-timer-toggle type="button">' + (cookTimer.intervalId ? "⏸ Pause" : "▶ Démarrer") + '</button>' +
+              '<button class="btn" data-timer-reset type="button">↺</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="cook-nav">' +
+            '<button class="btn" data-cook-prev type="button"' + (i === 0 ? ' disabled' : '') + '>← Précédent</button>' +
+            (i < total - 1
+              ? '<button class="btn btn-primary" data-cook-next type="button">Suivant →</button>'
+              : '<button class="btn btn-primary" data-cook-done type="button">Terminé ✓</button>') +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div class="cook-nav">' +
-        '<button class="btn" data-cook-prev type="button"' + (i === 0 ? ' disabled' : '') + '>← Précédent</button>' +
-        (i < total - 1
-          ? '<button class="btn btn-primary" data-cook-next type="button">Suivant →</button>'
-          : '<button class="btn btn-primary" data-cook-done type="button">Terminé ✓</button>') +
       '</div>';
 
     els.cookSheet.querySelector("[data-cook-close]").addEventListener("click", closeCookMode);
     wireCookTimer();
+    wireCookIngredients();
     var prevBtn = els.cookSheet.querySelector("[data-cook-prev]");
     if (prevBtn) prevBtn.addEventListener("click", function(){ if (cookState.index > 0){ cookState.index--; renderCook(); } });
     var nextBtn = els.cookSheet.querySelector("[data-cook-next]");
@@ -604,6 +630,7 @@
     if (!r.steps || !r.steps.length) return;
     cookState.recipe = r;
     cookState.index = 0;
+    cookState.checkedIng = {};
     renderCook();
     els.cookOverlay.hidden = false;
   }

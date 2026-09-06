@@ -400,8 +400,19 @@ footer.site-footer{
 .cook-overlay{ background:var(--pine-deep); align-items:stretch; padding:0; }
 .cook-sheet{
   max-width:none; width:100%; min-height:100vh; border:none; border-radius:0; box-shadow:none;
-  background:var(--surface); display:flex; flex-direction:column; justify-content:center;
-  align-items:center; padding:32px 24px; text-align:center; animation:none;
+  background:var(--surface); padding:0; text-align:left; animation:none; overflow-y:auto;
+}
+.cook-layout{ display:flex; flex-direction:column; min-height:100vh; }
+.cook-ingredients{
+  background:var(--surface-2); border-bottom:1px solid var(--line); padding:14px 20px;
+  max-height:180px; overflow-y:auto; flex:none;
+}
+.cook-ingredients-title{ margin:0 0 8px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-deep); }
+.cook-ingredients .ing-list{ gap:5px; }
+.cook-ingredients .ing-check{ font-size:13.5px; }
+.cook-main{
+  flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center;
+  padding:28px 24px; text-align:center; position:relative; min-height:60vh;
 }
 .cook-head{
   position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center;
@@ -412,6 +423,15 @@ footer.site-footer{
 .cook-step{ font-family:"Fraunces",serif; font-size:clamp(22px,4vw,34px); line-height:1.45; max-width:46ch; margin-bottom:34px; }
 .cook-nav{ display:flex; gap:14px; }
 .cook-nav .btn{ padding:12px 22px; font-size:14.5px; }
+
+@media(min-width:820px){
+  .cook-layout{ flex-direction:row; }
+  .cook-ingredients{
+    width:280px; max-height:none; height:100vh; overflow-y:auto; position:sticky; top:0;
+    border-bottom:none; border-right:1px solid var(--line); padding:26px 22px;
+  }
+  .cook-main{ flex:1; min-height:100vh; }
+}
 
 /* ---------- planificateur & épicerie ---------- */
 .planner-week-nav{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
