@@ -263,6 +263,12 @@ main{ max-width:1080px; margin:0 auto; padding:28px 24px 100px; }
 .detail-fav:hover{ border-color:var(--danger); color:var(--danger-ink); }
 .detail-fav[aria-pressed="true"]{ background:var(--danger); border-color:var(--danger); color:#fff; }
 .cook-btn{ display:block; width:100%; margin:0 0 20px; text-align:center; }
+.servings-adjust{ display:flex; align-items:center; justify-content:space-between; gap:12px; background:var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin-bottom:20px; }
+.servings-adjust .lbl{ font-size:13px; color:var(--ink-soft); }
+.servings-stepper{ display:flex; align-items:center; gap:10px; }
+.servings-stepper button{ width:28px; height:28px; border-radius:50%; border:1px solid var(--line); background:var(--surface); cursor:pointer; font-size:16px; line-height:1; color:var(--ink); }
+.servings-stepper button:hover{ border-color:var(--accent); color:var(--accent-deep); }
+.servings-stepper span{ min-width:20px; text-align:center; font-size:16px; font-weight:600; }
 .sheet-close{
   appearance:none; border:none; background:none; cursor:pointer; color:var(--ink-soft);
   padding:4px; line-height:1; font-size:20px; border-radius:4px;
@@ -404,11 +410,21 @@ footer.site-footer{
 .planner-week-nav{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:20px; flex-wrap:wrap; }
 .planner-week-label{ font-family:"IBM Plex Mono",monospace; font-size:13.5px; color:var(--ink-soft); text-transform:capitalize; }
 .planner-days{ display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:12px; margin-bottom:32px; }
-.planner-day{ background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:14px; box-shadow:var(--shadow); }
-.planner-day-label{ display:flex; justify-content:space-between; align-items:baseline; font-weight:600; font-size:14px; margin-bottom:10px; }
+.planner-day{ background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:14px; box-shadow:var(--shadow); display:flex; flex-direction:column; gap:12px; }
+.planner-day-label{ display:flex; justify-content:space-between; align-items:baseline; font-weight:600; font-size:14px; }
 .planner-date{ font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink-faint); font-weight:400; text-transform:lowercase; }
+.planner-slot{ display:flex; flex-direction:column; gap:5px; padding-top:10px; border-top:1px dashed var(--line); }
+.planner-slot:first-of-type{ padding-top:0; border-top:none; }
+.planner-slot-label{ font-size:11.5px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; }
+.planner-slot-row{ display:flex; gap:6px; }
+.planner-search{ flex:1; min-width:0; border:1px solid var(--line); border-radius:5px; padding:8px 9px; font-size:13.5px; background:var(--surface); color:var(--ink); font-family:inherit; }
+.planner-search:disabled{ background:var(--surface-2); color:var(--ink-faint); }
+.planner-leftovers-btn{ flex:none; width:34px; border:1px solid var(--line); border-radius:5px; background:var(--surface); cursor:pointer; font-size:15px; }
+.planner-leftovers-btn.active{ background:var(--accent); border-color:var(--accent); }
 .planner-select{ width:100%; border:1px solid var(--line); border-radius:5px; padding:8px 9px; font-size:13.5px; background:var(--surface); color:var(--ink); font-family:inherit; }
-.grocery-section{ max-width:520px; }
+.planner-servings{ width:100%; border:1px solid var(--line); border-radius:5px; padding:6px 9px; font-size:13px; background:var(--surface-2); color:var(--ink); font-family:"IBM Plex Mono",monospace; }
+.grocery-header{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+.grocery-section{ max-width:560px; }
 .grocery-list{ display:flex; flex-direction:column; gap:8px; }
 .grocery-item{ display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:9px 12px; cursor:pointer; font-size:14.5px; }
 .grocery-item input{ width:16px; height:16px; accent-color:var(--pine); flex:none; cursor:pointer; }

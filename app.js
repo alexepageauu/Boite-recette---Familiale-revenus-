@@ -1,11 +1,12 @@
 (function(){
   "use strict";
 
-  var CATEGORIES = ["Déjeuner","Entrée","Plat principal","Dessert","Pâtisserie","Boisson","Autre"];
+  var CATEGORIES = ["Déjeuner","Entrée","Plat principal","Collation","Dessert","Pâtisserie","Boisson","Autre"];
   var CATEGORY_COLORS = {
     "Déjeuner": "#c98a3a",
     "Entrée": "#5c8a6e",
     "Plat principal": "#3d5a44",
+    "Collation": "#8a6bb0",
     "Dessert": "#b3496b",
     "Pâtisserie": "#a9762f",
     "Boisson": "#3f7f8c",
@@ -35,7 +36,8 @@
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
    "familyBadgeBtn","familyOnboardingOverlay","famTabCreate","famTabJoin","famError",
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
-   "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility","memoryBanner","plannerView"
+   "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility","memoryBanner","plannerView",
+   "addToPlannerOverlay","addToPlannerClose","atp-day","atp-slot","atp-servings","atpCancel","atpConfirm"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -278,9 +280,20 @@
     var r = findRecipe(id);
     if (!r) return;
     var photoBlock = r.photo_url ? '<img class="detail-photo" src="' + esc(r.photo_url) + '" alt="">' : "";
+    var currentServings = r.servings || null;
 
     var ingHtml = (r.ingredients||[]).map(function(i,idx){ return '<li><label class="ing-check"><input type="checkbox" data-ing-idx="' + idx + '"><span>' + esc(i) + '</span></label></li>'; }).join("");
     var stepHtml = (r.steps||[]).map(function(s){ return "<li>" + esc(s) + "</li>"; }).join("");
+    var servingsAdjustHtml = r.servings
+      ? '<div class="servings-adjust">' +
+          '<span class="lbl">Ajuster les portions pour l\'affichage</span>' +
+          '<div class="servings-stepper">' +
+            '<button type="button" data-serv-minus aria-label="Moins">−</button>' +
+            '<span id="detailServingsVal" class="mono">' + r.servings + '</span>' +
+            '<button type="button" data-serv-plus aria-label="Plus">+</button>' +
+          '</div>' +
+        '</div>'
+      : '';
 
     var sourceHtml = r.source_url
       ? (/^https?:\/\//i.test(r.source_url)
@@ -292,6 +305,7 @@
     var actionsHtml = state.session
       ? '<div class="detail-actions">' +
           '<button class="btn" data-edit type="button">Modifier</button>' +
+          '<button class="btn" data-add-planner type="button">📅 Ajouter au planificateur</button>' +
           '<button class="btn" data-toggle-visibility type="button">' + (isPublic ? "🔒 Rendre privée" : "🌐 Rendre publique") + '</button>' +
           '<button class="btn btn-danger" data-delete type="button">Supprimer</button>' +
         '</div>'
@@ -322,8 +336,9 @@
           (r.servings ? '<div class="stat"><span class="num mono">' + num(r.servings) + '</span><span class="lbl">Portions</span></div>' : '') +
         '</div>' +
         '<button type="button" class="btn btn-primary cook-btn" data-cook>👩‍🍳 Mode cuisine</button>' +
+        servingsAdjustHtml +
         '<div class="detail-cols">' +
-          '<div><p class="detail-h">Ingrédients</p><ul class="ing-list">' + ingHtml + '</ul></div>' +
+          '<div><p class="detail-h">Ingrédients</p><ul class="ing-list" id="detailIngList">' + ingHtml + '</ul></div>' +
           '<div><p class="detail-h">Étapes</p><ol class="step-list">' + stepHtml + '</ol></div>' +
         '</div>' +
         sourceHtml +
@@ -338,6 +353,26 @@
     var editBtn = els.detailSheet.querySelector("[data-edit]");
     var delBtn = els.detailSheet.querySelector("[data-delete]");
     var visBtn = els.detailSheet.querySelector("[data-toggle-visibility]");
+    var addPlannerBtn = els.detailSheet.querySelector("[data-add-planner]");
+    if (addPlannerBtn) addPlannerBtn.addEventListener("click", function(){ openAddToPlanner(r, currentServings); });
+    if (r.servings){
+      var baseServings = r.servings;
+      var minusBtn = els.detailSheet.querySelector("[data-serv-minus]");
+      var plusBtn = els.detailSheet.querySelector("[data-serv-plus]");
+      var valEl = els.detailSheet.querySelector("#detailServingsVal");
+      var refreshScaledIngredients = function(){
+        var ratio = currentServings / baseServings;
+        var listEl = els.detailSheet.querySelector("#detailIngList");
+        if (listEl){
+          listEl.innerHTML = (r.ingredients||[]).map(function(i,idx){
+            return '<li><label class="ing-check"><input type="checkbox" data-ing-idx="' + idx + '"><span>' + esc(scaleIngredientText(i, ratio)) + '</span></label></li>';
+          }).join("");
+        }
+        if (valEl) valEl.textContent = currentServings;
+      };
+      if (minusBtn) minusBtn.addEventListener("click", function(){ if (currentServings > 1){ currentServings--; refreshScaledIngredients(); } });
+      if (plusBtn) plusBtn.addEventListener("click", function(){ currentServings++; refreshScaledIngredients(); });
+    }
     if (editBtn) editBtn.addEventListener("click", function(){ closeDetail(); openForm(r); });
     if (visBtn) visBtn.addEventListener("click", function(){
       if (!supabase) return;
@@ -578,6 +613,41 @@
     cookState.recipe = null;
   }
   els.cookOverlay.addEventListener("click", function(e){ if (e.target === els.cookOverlay) closeCookMode(); });
+
+  /* ---------------- ajouter au planificateur (depuis une fiche recette) ---------------- */
+  var pendingPlannerRecipe = null;
+  function openAddToPlanner(recipe, defaultServings){
+    if (!state.session){ openAuth("login"); return; }
+    if (!state.familyId) return;
+    pendingPlannerRecipe = recipe;
+    var daySel = els["atp-day"];
+    daySel.innerHTML = "";
+    var today = new Date();
+    for (var i = 0; i < 21; i++){
+      var d = new Date(today);
+      d.setDate(today.getDate() + i);
+      var opt = document.createElement("option");
+      opt.value = isoDate(d);
+      var dayName = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"][d.getDay()];
+      opt.textContent = (i === 0 ? "Aujourd'hui — " : i === 1 ? "Demain — " : "") + dayName + " " + d.getDate() + " " + MONTH_SHORT[d.getMonth()];
+      daySel.appendChild(opt);
+    }
+    els["atp-servings"].value = defaultServings || recipe.servings || "";
+    els.addToPlannerOverlay.hidden = false;
+  }
+  function closeAddToPlanner(){ els.addToPlannerOverlay.hidden = true; pendingPlannerRecipe = null; }
+  els.addToPlannerClose.addEventListener("click", closeAddToPlanner);
+  els.atpCancel.addEventListener("click", closeAddToPlanner);
+  els.addToPlannerOverlay.addEventListener("click", function(e){ if (e.target === els.addToPlannerOverlay) closeAddToPlanner(); });
+  els.atpConfirm.addEventListener("click", function(){
+    if (!pendingPlannerRecipe) return;
+    var dateIso = els["atp-day"].value;
+    var slot = els["atp-slot"].value;
+    var servings = Number(els["atp-servings"].value) || null;
+    assignMeal(dateIso, slot, pendingPlannerRecipe.id, servings, false);
+    closeAddToPlanner();
+    toast("Ajouté au planificateur — vérifie l'onglet Planifier.");
+  });
 
   /* ---------------- delete confirm ---------------- */
   function closeConfirm(){ els.confirmOverlay.hidden = true; state.deleteTargetId = null; }
@@ -1411,6 +1481,12 @@
     return days;
   }
   function normalizeIngKey(s){ return s.trim().toLowerCase(); }
+  var MEAL_SLOTS = [
+    { key: "souper", label: "Souper", icon: "🍽️" },
+    { key: "collation", label: "Collation", icon: "🍎" }
+  ];
+  var LEFTOVERS_VALUE = "__restants__";
+  function mealKey(dateIso, slot){ return dateIso + "|" + slot; }
 
   function loadMealPlan(){
     if (!supabase || !state.familyId) return;
@@ -1420,25 +1496,41 @@
       .then(function(res){
         if (res.error) return;
         state.mealPlan = {};
-        (res.data || []).forEach(function(row){ state.mealPlan[row.plan_date] = row; });
+        (res.data || []).forEach(function(row){ state.mealPlan[mealKey(row.plan_date, row.meal_slot)] = row; });
         if (state.view === "planner") renderPlanner();
         loadGroceryChecks();
       });
   }
 
-  function assignMeal(dateIso, recipeId){
+  function assignMeal(dateIso, slot, recipeId, servings, isLeftovers){
     if (!supabase || !state.familyId || !state.session) return;
-    if (!recipeId){
-      supabase.from("meal_plan").delete().eq("family_id", state.familyId).eq("plan_date", dateIso).then(function(){ loadMealPlan(); });
+    if (!recipeId && !isLeftovers){
+      supabase.from("meal_plan").delete().eq("family_id", state.familyId).eq("plan_date", dateIso).eq("meal_slot", slot).then(function(){ loadMealPlan(); });
       return;
     }
-    supabase.from("meal_plan").upsert(
-      { family_id: state.familyId, plan_date: dateIso, recipe_id: recipeId, created_by: state.session.user.id },
-      { onConflict: "family_id,plan_date" }
-    ).then(function(res){
-      if (res.error){ toast("Impossible d'assigner la recette — " + res.error.message); return; }
+    supabase.from("meal_plan").upsert({
+      family_id: state.familyId, plan_date: dateIso, meal_slot: slot,
+      recipe_id: isLeftovers ? null : recipeId,
+      servings: isLeftovers ? null : (servings || null),
+      is_leftovers: !!isLeftovers,
+      created_by: state.session.user.id
+    }, { onConflict: "family_id,plan_date,meal_slot" }).then(function(res){
+      if (res.error){ toast("Impossible d'assigner — " + res.error.message); return; }
       loadMealPlan();
     });
+  }
+
+  // Ajustement approximatif des quantités selon les portions désirées.
+  // Ne fonctionne que si l'ingrédient commence par un nombre (ex. "500 g de farine") —
+  // les quantités en mots ou en fractions unicode (½) ne sont pas ajustées.
+  function scaleIngredientText(text, ratio){
+    if (!ratio || ratio === 1) return text;
+    var m = text.match(/^(\d+(?:[.,]\d+)?)/);
+    if (!m) return text;
+    var num = parseFloat(m[1].replace(",", "."));
+    var scaled = Math.round(num * ratio * 4) / 4;
+    var display = (scaled % 1 === 0) ? String(scaled) : scaled.toFixed(2).replace(/0$/,"").replace(/\.$/,"");
+    return display + text.slice(m[0].length);
   }
 
   function currentWeekIngredients(){
@@ -1446,13 +1538,18 @@
     var items = [];
     var seen = {};
     days.forEach(function(d){
-      var entry = state.mealPlan[isoDate(d)];
-      if (!entry || !entry.recipe_id) return;
-      var recipe = state.recipes.filter(function(r){ return r.id === entry.recipe_id; })[0];
-      if (!recipe) return;
-      (recipe.ingredients || []).forEach(function(ing){
-        var key = normalizeIngKey(ing);
-        if (!seen[key]){ seen[key] = true; items.push({ key: key, label: ing }); }
+      var iso = isoDate(d);
+      MEAL_SLOTS.forEach(function(slotDef){
+        var entry = state.mealPlan[mealKey(iso, slotDef.key)];
+        if (!entry || entry.is_leftovers || !entry.recipe_id) return;
+        var recipe = state.recipes.filter(function(r){ return r.id === entry.recipe_id; })[0];
+        if (!recipe) return;
+        var ratio = (entry.servings && recipe.servings) ? (entry.servings / recipe.servings) : 1;
+        (recipe.ingredients || []).forEach(function(ing){
+          var scaled = scaleIngredientText(ing, ratio);
+          var key = normalizeIngKey(scaled);
+          if (!seen[key]){ seen[key] = true; items.push({ key: key, label: scaled }); }
+        });
       });
     });
     return items;
@@ -1501,22 +1598,62 @@
     });
   }
 
+  function exportGroceryList(){
+    var items = currentWeekIngredients();
+    var days = currentWeekDates();
+    var title = "Liste d'épicerie — " + days[0].getDate() + " " + MONTH_SHORT[days[0].getMonth()] + " au " + days[6].getDate() + " " + MONTH_SHORT[days[6].getMonth()];
+    if (!items.length){ toast("La liste est vide — assigne des recettes d'abord."); return; }
+    var html = "<!doctype html><html><head><meta charset='utf-8'><title>" + title + "</title>" +
+      "<style>body{font-family:Georgia,'Times New Roman',serif;padding:40px;max-width:520px;margin:0 auto;color:#23302a;}" +
+      "h1{font-size:21px;border-bottom:2px solid #23302a;padding-bottom:12px;}" +
+      "ul{list-style:none;padding:0;margin-top:20px;} li{padding:9px 0;border-bottom:1px solid #ccc;font-size:15px;display:flex;gap:10px;}" +
+      "li:before{content:'☐';font-size:17px;}</style></head><body>" +
+      "<h1>" + title + "</h1><ul>" +
+      items.map(function(it){ return "<li>" + esc(it.label) + "</li>"; }).join("") +
+      "</ul></body></html>";
+    var win = window.open("", "_blank");
+    if (!win){ toast("Ton navigateur a bloqué la fenêtre — autorise les pop-ups pour ce site."); return; }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(function(){ win.print(); }, 300);
+  }
+
   var DAY_NAMES = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
   var MONTH_SHORT = ["jan","fév","mar","avr","mai","juin","juil","août","sep","oct","nov","déc"];
 
   function renderPlanner(){
     if (!els.plannerView) return;
     var days = currentWeekDates();
-    var recipeOptions = state.recipes.map(function(r){ return '<option value="' + r.id + '">' + esc(r.title) + '</option>'; }).join("");
+    var datalistEl = document.getElementById("recipeDatalist");
+    if (datalistEl) datalistEl.innerHTML = state.recipes.map(function(r){ return '<option value="' + esc(r.title) + '">'; }).join("");
 
     var rowsHtml = days.map(function(d, idx){
       var iso = isoDate(d);
+      var slotsHtml = MEAL_SLOTS.map(function(slotDef){
+        var entry = state.mealPlan[mealKey(iso, slotDef.key)];
+        var isLeftover = entry && entry.is_leftovers;
+        var recipe = entry && entry.recipe_id ? state.recipes.filter(function(r){ return r.id === entry.recipe_id; })[0] : null;
+        var searchValue = recipe ? recipe.title : "";
+        var showServings = !!(entry && !isLeftover && entry.recipe_id);
+        return '<div class="planner-slot">' +
+          '<label class="planner-slot-label">' + slotDef.icon + ' ' + slotDef.label + '</label>' +
+          '<div class="planner-slot-row">' +
+            '<input type="text" class="planner-search" list="recipeDatalist" placeholder="Chercher une recette…" autocomplete="off" ' +
+              (isLeftover ? 'disabled placeholder="🥡 Restants"' : '') +
+              'data-plan-date="' + iso + '" data-plan-slot="' + slotDef.key + '" value="' + esc(searchValue) + '">' +
+            '<button type="button" class="planner-leftovers-btn' + (isLeftover ? ' active' : '') + '" ' +
+              'data-plan-date="' + iso + '" data-plan-slot="' + slotDef.key + '" title="Marquer comme restants">🥡</button>' +
+          '</div>' +
+          '<input type="number" class="planner-servings" min="1" max="30" placeholder="Portions" ' +
+            'data-servings-date="' + iso + '" data-servings-slot="' + slotDef.key + '" ' +
+            (entry && entry.servings ? 'value="' + entry.servings + '"' : '') +
+            (showServings ? '' : ' hidden') + '>' +
+        '</div>';
+      }).join("");
       return '<div class="planner-day">' +
         '<div class="planner-day-label">' + DAY_NAMES[idx] + '<span class="planner-date">' + d.getDate() + ' ' + MONTH_SHORT[d.getMonth()] + '</span></div>' +
-        '<select class="planner-select" data-plan-date="' + iso + '">' +
-          '<option value="">— Aucune recette —</option>' +
-          recipeOptions +
-        '</select>' +
+        slotsHtml +
       '</div>';
     }).join("");
 
@@ -1528,21 +1665,52 @@
       '</div>' +
       '<div class="planner-days">' + rowsHtml + '</div>' +
       '<div class="grocery-section">' +
-        '<p class="detail-h">🛒 Liste d\'épicerie de la semaine</p>' +
+        '<div class="grocery-header"><p class="detail-h" style="margin:0;">🛒 Liste d\'épicerie de la semaine</p>' +
+        '<button class="btn" id="groceryExportBtn" type="button">🖨️ Imprimer / PDF</button></div>' +
         '<div class="grocery-list" id="groceryList"><p class="hint">Chargement…</p></div>' +
       '</div>';
 
     days.forEach(function(d){
       var iso = isoDate(d);
-      var entry = state.mealPlan[iso];
-      var sel = els.plannerView.querySelector('[data-plan-date="' + iso + '"]');
-      if (!sel) return;
-      if (entry) sel.value = entry.recipe_id;
-      sel.addEventListener("change", function(){ assignMeal(iso, sel.value || null); });
+      MEAL_SLOTS.forEach(function(slotDef){
+        var searchInput = els.plannerView.querySelector('input.planner-search[data-plan-date="' + iso + '"][data-plan-slot="' + slotDef.key + '"]');
+        var servingsInput = els.plannerView.querySelector('input.planner-servings[data-servings-date="' + iso + '"][data-servings-slot="' + slotDef.key + '"]');
+        var leftoverBtn = els.plannerView.querySelector('.planner-leftovers-btn[data-plan-date="' + iso + '"][data-plan-slot="' + slotDef.key + '"]');
+        if (!searchInput) return;
+
+        searchInput.addEventListener("input", function(){
+          var match = state.recipes.filter(function(r){ return r.title === searchInput.value; })[0];
+          if (match){
+            if (!servingsInput.value && match.servings) servingsInput.value = match.servings;
+            servingsInput.hidden = false;
+            assignMeal(iso, slotDef.key, match.id, Number(servingsInput.value) || null, false);
+          }
+        });
+        searchInput.addEventListener("blur", function(){
+          if (!searchInput.value.trim()){
+            servingsInput.hidden = true;
+            assignMeal(iso, slotDef.key, null, null, false);
+          }
+        });
+        if (servingsInput){
+          servingsInput.addEventListener("change", function(){
+            var match = state.recipes.filter(function(r){ return r.title === searchInput.value; })[0];
+            if (match) assignMeal(iso, slotDef.key, match.id, Number(servingsInput.value) || null, false);
+          });
+        }
+        if (leftoverBtn){
+          leftoverBtn.addEventListener("click", function(){
+            var entry = state.mealPlan[mealKey(iso, slotDef.key)];
+            var alreadyLeftover = entry && entry.is_leftovers;
+            assignMeal(iso, slotDef.key, null, null, !alreadyLeftover);
+          });
+        }
+      });
     });
 
     els.plannerView.querySelector("#plannerPrevWeek").addEventListener("click", function(){ state.plannerWeekOffset--; loadMealPlan(); });
     els.plannerView.querySelector("#plannerNextWeek").addEventListener("click", function(){ state.plannerWeekOffset++; loadMealPlan(); });
+    els.plannerView.querySelector("#groceryExportBtn").addEventListener("click", exportGroceryList);
 
     renderGroceryList();
   }

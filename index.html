@@ -76,6 +76,7 @@
   </div>
 
   <div class="planner-view" id="plannerView" hidden></div>
+  <datalist id="recipeDatalist"></datalist>
 </main>
 
 <footer class="site-footer">La Boîte à Recettes — carnet familial</footer>
@@ -354,6 +355,37 @@
 <!-- mode cuisine plein écran -->
 <div class="overlay cook-overlay" id="cookOverlay" hidden>
   <div class="sheet cook-sheet" id="cookSheet"></div>
+</div>
+
+<!-- ajouter une recette au planificateur -->
+<div class="overlay" id="addToPlannerOverlay" hidden>
+  <div class="sheet" style="max-width:380px;">
+    <div class="sheet-head">
+      <h2 class="display" style="margin:0;font-size:19px;">Ajouter au planificateur</h2>
+      <button class="sheet-close" id="addToPlannerClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="form-body">
+      <div class="field">
+        <label for="atp-day">Jour</label>
+        <select id="atp-day"></select>
+      </div>
+      <div class="field">
+        <label for="atp-slot">Repas</label>
+        <select id="atp-slot">
+          <option value="souper">🍽️ Souper</option>
+          <option value="collation">🍎 Collation</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="atp-servings">Portions</label>
+        <input type="number" id="atp-servings" min="1" max="30" class="mono">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="atpCancel">Annuler</button>
+        <button type="button" class="btn btn-primary" id="atpConfirm">Ajouter à la semaine</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
