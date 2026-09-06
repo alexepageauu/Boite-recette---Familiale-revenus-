@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Boîte à Recettes — carnet de recettes de famille</title>
+<meta name="description" content="Le carnet de recettes de la famille : ajoutez, retrouvez et partagez vos recettes préférées avec photos, ingrédients et étapes.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🗃️%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div>
+      <p class="brand-eyebrow">Carnet de famille</p>
+      <h1 class="brand-title">La Boîte à Recettes</h1>
+      <p class="brand-sub">Les recettes qu'on se garde précieusement.</p>
+    </div>
+    <div class="header-side">
+      <svg class="family-icon" width="54" height="30" viewBox="0 0 90 50" fill="none" stroke="#f2efe2" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="14" cy="10" r="6"/><path d="M2 34c0-8 6-13 12-13s12 5 12 13"/>
+        <circle cx="38" cy="8" r="7"/><path d="M24 34c0-9 7-15 14-15s14 6 14 15"/>
+        <circle cx="62" cy="14" r="5"/><path d="M52 34c0-6.5 4.5-11 10-11s10 4.5 10 11"/>
+        <circle cx="78" cy="16" r="4.4"/><path d="M70 34c0-5.6 3.6-9.4 8-9.4s8 3.8 8 9.4"/>
+      </svg>
+      <div class="count-badge" id="countBadge"><b>0</b> recette</div>
+      <button class="family-badge" id="familyBadgeBtn" type="button" hidden></button>
+      <div class="auth-widget" id="authWidget">
+        <button class="auth-link" id="authOpenBtn" type="button">Se connecter / créer un compte</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="controls-wrap">
+  <div class="view-switch" id="viewSwitch">
+    <button class="view-btn active" data-view="recipes" type="button">🍽️ Recettes</button>
+    <button class="view-btn" data-view="blog" type="button">📰 Blogue nutrition</button>
+  </div>
+  <div class="controls">
+    <div class="tabs" id="tabs"></div>
+    <button class="fav-toggle" id="favToggleBtn" type="button" aria-pressed="false">♥ Mes favoris</button>
+    <button class="import-btn" id="importBtn" type="button">📋 Importer une recette</button>
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input type="text" id="searchInput" placeholder="Chercher une recette ou un ingrédient…">
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="banner" id="modeBanner" hidden></div>
+  <div class="featured" id="featuredSection" hidden></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty-state" id="emptyState" hidden>
+    <p class="display" id="emptyTitle">La boîte est vide</p>
+    <p id="emptyText">Ajoutez la toute première recette avec le bouton en bas à droite.</p>
+  </div>
+
+  <div class="blog-list" id="blogList" hidden></div>
+  <div class="empty-state" id="blogEmptyState" hidden>
+    <p class="display">Le blogue est vide</p>
+    <p>Publiez le tout premier article avec le bouton en bas à droite.</p>
+  </div>
+</main>
+
+<footer class="site-footer">La Boîte à Recettes — carnet familial</footer>
+
+<button class="fab" id="addBtn" type="button">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+  Ajouter une recette
+</button>
+
+<!-- detail overlay -->
+<div class="overlay" id="detailOverlay" hidden>
+  <div class="sheet" id="detailSheet"></div>
+</div>
+
+<!-- add/edit form overlay -->
+<div class="overlay" id="formOverlay" hidden>
+  <div class="sheet" style="max-width:640px;">
+    <div class="sheet-head">
+      <h2 class="display" id="formHeading" style="margin:0;font-size:22px;">Ajouter une recette</h2>
+      <button class="sheet-close" id="formClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <form class="form-body" id="recipeForm">
+      <div class="form-error" id="formError" hidden></div>
+      <div class="field">
+        <label for="f-title">Titre</label>
+        <input type="text" id="f-title" required maxlength="80" placeholder="Ex. Tourtière de mémé">
+      </div>
+
+      <div class="field">
+        <label>Photo <span class="hint">(facultatif)</span></label>
+        <div class="photo-drop" id="photoDrop">
+          <img class="thumb" id="photoThumb" hidden>
+          <span id="photoIcon" class="photo-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg>
+          </span>
+          <span class="drop-txt" id="photoTxt"><b>Choisir une photo</b><br>JPG ou PNG, redimensionnée automatiquement</span>
+        </div>
+        <input type="file" id="f-photo" accept="image/*" hidden>
+      </div>
+
+      <div class="field">
+        <label for="f-story">Petite histoire <span class="hint">(facultatif) — d'où vient cette recette?</span></label>
+        <textarea id="f-story" maxlength="600" placeholder="Ex. La recette de mémé, transmise depuis les années 60…"></textarea>
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="f-cat">Catégorie</label>
+          <select id="f-cat"></select>
+        </div>
+        <div class="field">
+          <label for="f-servings">Portions</label>
+          <input type="number" id="f-servings" min="1" max="99" placeholder="4" class="mono">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="f-tags">Étiquettes <span class="hint">(facultatif) — séparées par des virgules</span></label>
+        <input type="text" id="f-tags" placeholder="Ex. rapide, végé, à congeler">
+      </div>
+
+      <div class="row2">
+        <div class="field">
+          <label for="f-prep">Préparation (min)</label>
+          <input type="number" id="f-prep" min="0" max="999" placeholder="20" class="mono">
+        </div>
+        <div class="field">
+          <label for="f-cook">Cuisson (min)</label>
+          <input type="number" id="f-cook" min="0" max="999" placeholder="45" class="mono">
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="f-ingredients">Ingrédients <span class="hint">— un par ligne</span></label>
+        <textarea id="f-ingredients" required placeholder="500 g de farine&#10;2 oeufs&#10;250 ml de lait"></textarea>
+      </div>
+
+      <div class="field">
+        <label for="f-steps">Étapes <span class="hint">— une par ligne</span></label>
+        <textarea id="f-steps" required placeholder="Préchauffer le four à 180°C&#10;Mélanger les ingrédients secs&#10;..."></textarea>
+      </div>
+
+      <div class="field">
+        <label for="f-author">Ajouté par <span class="hint">(facultatif)</span></label>
+        <input type="text" id="f-author" maxlength="40" placeholder="Ton prénom">
+      </div>
+
+      <div class="field">
+        <label for="f-source">Lien de la recette originale <span class="hint">(facultatif) — si elle vient d'un autre site</span></label>
+        <input type="url" id="f-source" placeholder="https://...">
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn" id="formCancel">Annuler</button>
+        <button type="submit" class="btn btn-primary" id="formSubmit">Enregistrer la recette</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- delete confirm overlay -->
+<div class="overlay" id="confirmOverlay" hidden>
+  <div class="sheet confirm-sheet">
+    <div class="sheet-head">
+      <h2 class="display" style="margin:0;font-size:19px;">Supprimer cette recette&nbsp;?</h2>
+      <button class="sheet-close" id="confirmClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="confirm-body">
+      <p>Cette action est définitive et retirera la recette pour toute la famille.</p>
+      <div class="form-actions" style="justify-content:flex-start;">
+        <button class="btn btn-danger" id="confirmDeleteBtn" type="button">Supprimer</button>
+        <button class="btn" id="confirmCancelBtn" type="button">Annuler</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- auth overlay (login / signup) -->
+<div class="overlay" id="authOverlay" hidden>
+  <div class="sheet" style="max-width:400px;">
+    <div class="sheet-head">
+      <h2 class="display" id="authHeading" style="margin:0;font-size:20px;">Se connecter</h2>
+      <button class="sheet-close" id="authClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="authTabLogin" type="button">Se connecter</button>
+      <button class="auth-tab" id="authTabSignup" type="button">Créer un compte</button>
+    </div>
+    <form class="form-body" id="authForm">
+      <div class="form-error" id="authError" hidden></div>
+      <div class="field" id="authNameField" hidden>
+        <label for="a-name">Ton prénom</label>
+        <input type="text" id="a-name" maxlength="40" placeholder="Ex. Alexe">
+      </div>
+      <div class="field">
+        <label for="a-email">Courriel</label>
+        <input type="email" id="a-email" required placeholder="toi@exemple.com">
+      </div>
+      <div class="field">
+        <label for="a-password">Mot de passe</label>
+        <input type="password" id="a-password" required minlength="6" placeholder="6 caractères minimum">
+      </div>
+      <div class="form-actions" style="justify-content:space-between;align-items:center;">
+        <span class="hint" id="authHint"></span>
+        <button type="submit" class="btn btn-primary" id="authSubmit">Se connecter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- création / adhésion à une famille (obligatoire après connexion) -->
+<div class="overlay" id="familyOnboardingOverlay" hidden>
+  <div class="sheet" style="max-width:440px;">
+    <div class="sheet-head">
+      <h2 class="display" style="margin:0;font-size:20px;">Bienvenue !</h2>
+    </div>
+    <div class="form-body">
+      <p class="hint" style="margin:0;">Pour commencer, crée l'espace de ta famille, ou rejoins celui d'une famille qui t'a déjà invité(e) avec un code.</p>
+      <div class="family-onboard-tabs">
+        <button class="auth-tab active" id="famTabCreate" type="button">Créer ma famille</button>
+        <button class="auth-tab" id="famTabJoin" type="button">Rejoindre avec un code</button>
+      </div>
+      <div class="form-error" id="famError" hidden></div>
+      <div class="field" id="famCreateField">
+        <label for="fam-name">Nom de ta famille</label>
+        <input type="text" id="fam-name" maxlength="60" placeholder="Ex. Famille Pageau">
+      </div>
+      <div class="field" id="famJoinField" hidden>
+        <label for="fam-code">Code d'invitation</label>
+        <input type="text" id="fam-code" maxlength="12" placeholder="Ex. A1B2C3" style="text-transform:uppercase;">
+      </div>
+      <div class="form-actions" style="justify-content:flex-end;">
+        <button type="button" class="btn btn-primary" id="famSubmit">Créer ma famille</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- infos de la famille + code d'invitation à partager -->
+<div class="overlay" id="familyInfoOverlay" hidden>
+  <div class="sheet" style="max-width:420px;">
+    <div class="sheet-head">
+      <h2 class="display" id="famInfoHeading" style="margin:0;font-size:20px;">Ta famille</h2>
+      <button class="sheet-close" id="famInfoClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="form-body">
+      <p class="hint" style="margin:0;">Partage ce code avec les personnes que tu veux inviter dans ce carnet — elles n'ont qu'à choisir « Rejoindre avec un code » en créant leur compte.</p>
+      <div class="invite-code-box" id="famInviteCodeBox"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- importer une recette depuis un texte collé -->
+<div class="overlay" id="importOverlay" hidden>
+  <div class="sheet" style="max-width:560px;">
+    <div class="sheet-head">
+      <h2 class="display" style="margin:0;font-size:20px;">Importer une recette</h2>
+      <button class="sheet-close" id="importClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="form-body">
+      <p class="hint" style="margin:0;">Colle ici le texte d'une recette copiée ailleurs (site web, courriel, document). On va essayer de remplir le titre, les ingrédients et les étapes automatiquement — tu pourras tout ajuster avant d'enregistrer.</p>
+      <div class="field">
+        <textarea id="importText" style="min-height:220px;" placeholder="Colle le texte complet de la recette ici…"></textarea>
+      </div>
+      <div class="field">
+        <label for="importSourceUrl">Lien du site d'origine <span class="hint">(facultatif, mais recommandé)</span></label>
+        <input type="url" id="importSourceUrl" placeholder="https://...">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="importCancel">Annuler</button>
+        <button type="button" class="btn btn-primary" id="importAnalyze">Analyser le texte</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ajout/édition d'un article de blogue -->
+<div class="overlay" id="blogFormOverlay" hidden>
+  <div class="sheet" style="max-width:640px;">
+    <div class="sheet-head">
+      <h2 class="display" id="blogFormHeading" style="margin:0;font-size:22px;">Nouvel article</h2>
+      <button class="sheet-close" id="blogFormClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <form class="form-body" id="blogForm">
+      <div class="form-error" id="blogFormError" hidden></div>
+      <div class="field">
+        <label for="bf-title">Titre</label>
+        <input type="text" id="bf-title" required maxlength="100" placeholder="Ex. 5 découvertes récentes sur les fibres">
+      </div>
+      <div class="field">
+        <label>Photo de couverture <span class="hint">(facultatif)</span></label>
+        <div class="photo-drop" id="bfPhotoDrop">
+          <img class="thumb" id="bfPhotoThumb" hidden>
+          <span id="bfPhotoIcon" class="photo-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg>
+          </span>
+          <span class="drop-txt" id="bfPhotoTxt"><b>Choisir une photo</b><br>JPG ou PNG, redimensionnée automatiquement</span>
+        </div>
+        <input type="file" id="bf-photo" accept="image/*" hidden>
+      </div>
+      <div class="field">
+        <label for="bf-body">Texte de l'article <span class="hint">— un paragraphe par ligne vide</span></label>
+        <textarea id="bf-body" required style="min-height:220px;" placeholder="Écris ton article ici…"></textarea>
+      </div>
+      <div class="field">
+        <label for="bf-author">Écrit par <span class="hint">(facultatif)</span></label>
+        <input type="text" id="bf-author" maxlength="40" placeholder="Ton prénom">
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="blogFormCancel">Annuler</button>
+        <button type="submit" class="btn btn-primary" id="blogFormSubmit">Publier l'article</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- lecture d'un article de blogue -->
+<div class="overlay" id="blogDetailOverlay" hidden>
+  <div class="sheet blog-sheet" id="blogDetailSheet"></div>
+</div>
+
+<!-- mode cuisine plein écran -->
+<div class="overlay cook-overlay" id="cookOverlay" hidden>
+  <div class="sheet cook-sheet" id="cookSheet"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
