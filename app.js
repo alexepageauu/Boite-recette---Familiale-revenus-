@@ -35,7 +35,7 @@
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
    "familyBadgeBtn","familyOnboardingOverlay","famTabCreate","famTabJoin","famError",
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
-   "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility"
+   "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility","memoryBanner","plannerView"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -60,7 +60,10 @@
     familyInviteCode: "",
     isAdminFamily: false,
     famOnboardMode: "create",
-    openRecipeId: null
+    openRecipeId: null,
+    plannerWeekOffset: 0,
+    mealPlan: {},
+    groceryChecks: {}
   };
 
   var supabase = null;
@@ -216,6 +219,7 @@
     if (!els.featuredSection) return;
     if (!state.recipes.length || state.searchTerm.trim() || state.activeCategory !== TAB_ALL){
       els.featuredSection.hidden = true;
+      renderMemoryBanner();
       return;
     }
     var r = state.recipes[0];
@@ -230,6 +234,39 @@
       '</div>';
     els.featuredSection.hidden = false;
     els.featuredSection.querySelector("[data-featured-open]").addEventListener("click", function(){ openDetail(r.id); });
+    renderMemoryBanner();
+  }
+
+  /* ---------------- souvenir culinaire ---------------- */
+  function findMemoryRecipe(){
+    var today = new Date();
+    var matches = state.recipes.filter(function(r){
+      if (!r.created_at) return false;
+      var d = new Date(r.created_at);
+      return d.getMonth() === today.getMonth() && d.getDate() === today.getDate() && d.getFullYear() < today.getFullYear();
+    });
+    if (!matches.length) return null;
+    matches.sort(function(a,b){ return new Date(a.created_at) - new Date(b.created_at); });
+    return matches[0];
+  }
+
+  function renderMemoryBanner(){
+    if (!els.memoryBanner) return;
+    if (state.searchTerm.trim() || state.activeCategory !== TAB_ALL){ els.memoryBanner.hidden = true; return; }
+    var r = findMemoryRecipe();
+    if (!r){ els.memoryBanner.hidden = true; return; }
+    var years = new Date().getFullYear() - new Date(r.created_at).getFullYear();
+    var photoHtml = r.photo_url ? '<img src="' + esc(r.photo_url) + '" alt="">' : '<span class="ph-fallback">' + esc(initialsWord(r.title)) + '</span>';
+    els.memoryBanner.innerHTML =
+      '<div class="memory-photo">' + photoHtml + '</div>' +
+      '<div class="memory-text">' +
+        '<p class="memory-kicker">📸 Souvenir culinaire</p>' +
+        '<p class="memory-line">Il y a ' + years + ' an' + (years > 1 ? 's' : '') + ' aujourd\'hui, votre famille ajoutait <b>' + esc(r.title) + '</b>' + (r.author ? ' (par ' + esc(r.author) + ')' : '') + '.</p>' +
+        (r.story ? '<p class="memory-story hand">« ' + esc(r.story) + ' »</p>' : '') +
+        '<button class="btn" data-memory-open type="button">Revoir la recette</button>' +
+      '</div>';
+    els.memoryBanner.hidden = false;
+    els.memoryBanner.querySelector("[data-memory-open]").addEventListener("click", function(){ openDetail(r.id); });
   }
 
   /* ---------------- detail sheet ---------------- */
@@ -731,6 +768,11 @@
   var IMPORT_QTY_START = /^[\d½¼¾⅓⅔⅛]/;
   var IMPORT_HEADER_ING = /^(ingr[ée]dients?|ingredients?)\s*:?$/i;
   var IMPORT_HEADER_STEPS = /^([ée]tapes?|instructions?|pr[ée]paration|m[ée]thode|directions?|steps?)\s*:?$/i;
+  var IMPORT_META_SERVINGS = /^(?:portions?|servings?|rendement|yield|pour)\s*:?\s*(\d+)/i;
+  var IMPORT_META_PREP = /^(?:temps de )?pr[ée]paration\s*:?\s*(\d+)|^prep(?:\s*time)?\s*:?\s*(\d+)/i;
+  var IMPORT_META_COOK = /^(?:temps de )?cuisson\s*:?\s*(\d+)|^(?:cook|bake)(?:\s*time)?\s*:?\s*(\d+)/i;
+  var IMPORT_NOISE = /^(imprimer|print|\u00e9pingler|pin( it)?|jump to recipe|rate this recipe|share this|partager|save recipe|sauvegarder|note[sz]?\s*:?$|par\s+[a-zà-ÿ]+$|by\s+[a-z]+$|recette (originale )?de\s|adapt[ée]e? de\s|adapted from\s|source\s*:|publi[ée] le|posted on)\b/i;
+  var IMPORT_NOISE_STARS = /^[★☆\s]*\d+(\.\d+)?\s*(\/\s*5)?\s*(from|avis|reviews?|votes?)\b/i;
 
   function importLooksLikeIngredient(line){
     if (IMPORT_VERB_START.test(line)) return false;
@@ -749,7 +791,7 @@
 
   function parseRecipeText(text){
     var lines = text.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
-    if (!lines.length) return { title: "", ingredients: [], steps: [] };
+    if (!lines.length) return { title: "", ingredients: [], steps: [], servings: null, prep_min: null, cook_min: null };
 
     var hasHeaders = lines.some(function(l){ return IMPORT_HEADER_ING.test(l) || IMPORT_HEADER_STEPS.test(l); });
     var title = lines[0].replace(/^#+\s*/, "");
@@ -757,10 +799,22 @@
     var ingredients = [];
     var steps = [];
     var section = null;
+    var servings = null, prep_min = null, cook_min = null;
 
     body.forEach(function(raw){
       if (IMPORT_HEADER_ING.test(raw)){ section = "ing"; return; }
       if (IMPORT_HEADER_STEPS.test(raw)){ section = "steps"; return; }
+
+      // Métadonnées (portions, temps) : on les extrait pour remplir les champs dédiés, sans les mettre dans les ingrédients
+      var mServ = raw.match(IMPORT_META_SERVINGS);
+      if (mServ){ servings = Number(mServ[1]); return; }
+      var mPrep = raw.match(IMPORT_META_PREP);
+      if (mPrep){ prep_min = Number(mPrep[1] || mPrep[2]); return; }
+      var mCook = raw.match(IMPORT_META_COOK);
+      if (mCook){ cook_min = Number(mCook[1] || mCook[2]); return; }
+
+      // Bruit courant (boutons "Imprimer", évaluations, mentions d'auteur, etc.) : on ignore complètement
+      if (IMPORT_NOISE.test(raw) || IMPORT_NOISE_STARS.test(raw)) return;
 
       var isNumberedStep = /^\d+[.)]\s+(?=[A-Za-zÀ-ÿ])/.test(raw);
       var cleaned = raw.replace(/^[-*•]+\s*/, "").replace(/^\d+[.)]\s+/, "");
@@ -773,7 +827,7 @@
       else steps.push(cleaned);
     });
 
-    return { title: title, ingredients: ingredients, steps: steps };
+    return { title: title, ingredients: ingredients, steps: steps, servings: servings, prep_min: prep_min, cook_min: cook_min };
   }
 
   els.importBtn.addEventListener("click", function(){
@@ -798,6 +852,9 @@
     els["f-ingredients"].value = parsed.ingredients.join("\n");
     els["f-steps"].value = parsed.steps.join("\n");
     els["f-source"].value = sourceUrl;
+    if (parsed.servings) els["f-servings"].value = parsed.servings;
+    if (parsed.prep_min) els["f-prep"].value = parsed.prep_min;
+    if (parsed.cook_min) els["f-cook"].value = parsed.cook_min;
     toast("Texte analysé — vérifie et complète avant d'enregistrer.");
   });
 
@@ -808,6 +865,7 @@
     var recipeMode = view === "recipes";
     var discoverMode = view === "discover";
     var blogMode = view === "blog";
+    var plannerMode = view === "planner";
     els.viewSwitch.querySelectorAll(".view-btn").forEach(function(b){
       b.classList.toggle("active", b.getAttribute("data-view") === view);
     });
@@ -819,6 +877,7 @@
     els.grid.hidden = !recipeMode;
     els.emptyState.hidden = recipeMode ? els.emptyState.hidden : true;
     els.featuredSection.hidden = recipeMode ? els.featuredSection.hidden : true;
+    els.memoryBanner.hidden = recipeMode ? els.memoryBanner.hidden : true;
 
     els.discoverGrid.hidden = !discoverMode;
     els.discoverEmptyState.hidden = discoverMode ? !!state.discoverRecipes.length : true;
@@ -826,13 +885,16 @@
     els.blogList.hidden = !blogMode;
     els.blogEmptyState.hidden = blogMode ? !!state.blogPosts.length : true;
 
-    els.addBtn.hidden = discoverMode || (blogMode && !state.isAdminFamily);
+    els.plannerView.hidden = !plannerMode;
+
+    els.addBtn.hidden = discoverMode || plannerMode || (blogMode && !state.isAdminFamily);
     els.addBtn.innerHTML = blogMode
       ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Nouvel article'
       : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Ajouter une recette';
 
     if (recipeMode){ renderGrid(); renderFeatured(); }
     else if (discoverMode){ renderDiscoverGrid(); loadDiscoverRecipes(); }
+    else if (plannerMode){ renderPlanner(); loadMealPlan(); }
     else { renderBlogList(); loadBlogPosts(); }
   }
   els.viewSwitch.querySelectorAll(".view-btn").forEach(function(b){
@@ -1327,6 +1389,162 @@
     wireCommentForm(r.id);
     els.detailOverlay.hidden = false;
     state.openRecipeId = r.id;
+  }
+
+  /* ================= PLANIFICATEUR + LISTE D'ÉPICERIE ================= */
+
+  function getMonday(date){
+    var d = new Date(date);
+    var day = d.getDay();
+    var diff = (day === 0 ? -6 : 1 - day);
+    d.setDate(d.getDate() + diff);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+  function pad2(n){ return n < 10 ? "0" + n : String(n); }
+  function isoDate(d){ return d.getFullYear() + "-" + pad2(d.getMonth()+1) + "-" + pad2(d.getDate()); }
+  function currentWeekDates(){
+    var monday = getMonday(new Date());
+    monday.setDate(monday.getDate() + state.plannerWeekOffset * 7);
+    var days = [];
+    for (var i = 0; i < 7; i++){ var d = new Date(monday); d.setDate(monday.getDate() + i); days.push(d); }
+    return days;
+  }
+  function normalizeIngKey(s){ return s.trim().toLowerCase(); }
+
+  function loadMealPlan(){
+    if (!supabase || !state.familyId) return;
+    var days = currentWeekDates();
+    supabase.from("meal_plan").select("*").eq("family_id", state.familyId)
+      .gte("plan_date", isoDate(days[0])).lte("plan_date", isoDate(days[6]))
+      .then(function(res){
+        if (res.error) return;
+        state.mealPlan = {};
+        (res.data || []).forEach(function(row){ state.mealPlan[row.plan_date] = row; });
+        if (state.view === "planner") renderPlanner();
+        loadGroceryChecks();
+      });
+  }
+
+  function assignMeal(dateIso, recipeId){
+    if (!supabase || !state.familyId || !state.session) return;
+    if (!recipeId){
+      supabase.from("meal_plan").delete().eq("family_id", state.familyId).eq("plan_date", dateIso).then(function(){ loadMealPlan(); });
+      return;
+    }
+    supabase.from("meal_plan").upsert(
+      { family_id: state.familyId, plan_date: dateIso, recipe_id: recipeId, created_by: state.session.user.id },
+      { onConflict: "family_id,plan_date" }
+    ).then(function(res){
+      if (res.error){ toast("Impossible d'assigner la recette — " + res.error.message); return; }
+      loadMealPlan();
+    });
+  }
+
+  function currentWeekIngredients(){
+    var days = currentWeekDates();
+    var items = [];
+    var seen = {};
+    days.forEach(function(d){
+      var entry = state.mealPlan[isoDate(d)];
+      if (!entry || !entry.recipe_id) return;
+      var recipe = state.recipes.filter(function(r){ return r.id === entry.recipe_id; })[0];
+      if (!recipe) return;
+      (recipe.ingredients || []).forEach(function(ing){
+        var key = normalizeIngKey(ing);
+        if (!seen[key]){ seen[key] = true; items.push({ key: key, label: ing }); }
+      });
+    });
+    return items;
+  }
+
+  function loadGroceryChecks(){
+    if (!supabase || !state.familyId) return;
+    supabase.from("grocery_checks").select("*").eq("family_id", state.familyId).then(function(res){
+      if (res.error) return;
+      state.groceryChecks = {};
+      (res.data || []).forEach(function(row){ state.groceryChecks[row.item_text] = row.checked; });
+      if (state.view === "planner") renderGroceryList();
+    });
+  }
+
+  function toggleGroceryCheck(key, checked){
+    state.groceryChecks[key] = checked;
+    if (!supabase || !state.familyId) return;
+    supabase.from("grocery_checks").upsert(
+      { family_id: state.familyId, item_text: key, checked: checked },
+      { onConflict: "family_id,item_text" }
+    ).then(function(res){
+      if (res.error) toast("Impossible de sauvegarder la case cochée.");
+    });
+  }
+
+  function renderGroceryList(){
+    var listEl = els.plannerView.querySelector("#groceryList");
+    if (!listEl) return;
+    var items = currentWeekIngredients();
+    if (!items.length){
+      listEl.innerHTML = '<p class="hint">Assigne des recettes à la semaine pour générer la liste automatiquement.</p>';
+      return;
+    }
+    listEl.innerHTML = items.map(function(it){
+      var checked = !!state.groceryChecks[it.key];
+      return '<label class="grocery-item' + (checked ? ' checked' : '') + '">' +
+        '<input type="checkbox" data-grocery-key="' + esc(it.key) + '"' + (checked ? ' checked' : '') + '>' +
+        '<span>' + esc(it.label) + '</span></label>';
+    }).join("");
+    listEl.querySelectorAll("[data-grocery-key]").forEach(function(cb){
+      cb.addEventListener("change", function(){
+        cb.closest(".grocery-item").classList.toggle("checked", cb.checked);
+        toggleGroceryCheck(cb.getAttribute("data-grocery-key"), cb.checked);
+      });
+    });
+  }
+
+  var DAY_NAMES = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
+  var MONTH_SHORT = ["jan","fév","mar","avr","mai","juin","juil","août","sep","oct","nov","déc"];
+
+  function renderPlanner(){
+    if (!els.plannerView) return;
+    var days = currentWeekDates();
+    var recipeOptions = state.recipes.map(function(r){ return '<option value="' + r.id + '">' + esc(r.title) + '</option>'; }).join("");
+
+    var rowsHtml = days.map(function(d, idx){
+      var iso = isoDate(d);
+      return '<div class="planner-day">' +
+        '<div class="planner-day-label">' + DAY_NAMES[idx] + '<span class="planner-date">' + d.getDate() + ' ' + MONTH_SHORT[d.getMonth()] + '</span></div>' +
+        '<select class="planner-select" data-plan-date="' + iso + '">' +
+          '<option value="">— Aucune recette —</option>' +
+          recipeOptions +
+        '</select>' +
+      '</div>';
+    }).join("");
+
+    els.plannerView.innerHTML =
+      '<div class="planner-week-nav">' +
+        '<button class="btn" id="plannerPrevWeek" type="button">← Semaine précédente</button>' +
+        '<span class="planner-week-label">' + days[0].getDate() + ' ' + MONTH_SHORT[days[0].getMonth()] + ' – ' + days[6].getDate() + ' ' + MONTH_SHORT[days[6].getMonth()] + '</span>' +
+        '<button class="btn" id="plannerNextWeek" type="button">Semaine suivante →</button>' +
+      '</div>' +
+      '<div class="planner-days">' + rowsHtml + '</div>' +
+      '<div class="grocery-section">' +
+        '<p class="detail-h">🛒 Liste d\'épicerie de la semaine</p>' +
+        '<div class="grocery-list" id="groceryList"><p class="hint">Chargement…</p></div>' +
+      '</div>';
+
+    days.forEach(function(d){
+      var iso = isoDate(d);
+      var entry = state.mealPlan[iso];
+      var sel = els.plannerView.querySelector('[data-plan-date="' + iso + '"]');
+      if (!sel) return;
+      if (entry) sel.value = entry.recipe_id;
+      sel.addEventListener("change", function(){ assignMeal(iso, sel.value || null); });
+    });
+
+    els.plannerView.querySelector("#plannerPrevWeek").addEventListener("click", function(){ state.plannerWeekOffset--; loadMealPlan(); });
+    els.plannerView.querySelector("#plannerNextWeek").addEventListener("click", function(){ state.plannerWeekOffset++; loadMealPlan(); });
+
+    renderGroceryList();
   }
 
   /* ---------------- data wiring ---------------- */
