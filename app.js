@@ -1482,6 +1482,8 @@
   }
   function normalizeIngKey(s){ return s.trim().toLowerCase(); }
   var MEAL_SLOTS = [
+    { key: "dejeuner", label: "Déjeuner", icon: "🍳" },
+    { key: "diner", label: "Dîner", icon: "🥪" },
     { key: "souper", label: "Souper", icon: "🍽️" },
     { key: "collation", label: "Collation", icon: "🍎" }
   ];
@@ -1521,16 +1523,34 @@
   }
 
   // Ajustement approximatif des quantités selon les portions désirées.
-  // Ne fonctionne que si l'ingrédient commence par un nombre (ex. "500 g de farine") —
-  // les quantités en mots ou en fractions unicode (½) ne sont pas ajustées.
+  // Comprend les nombres simples (500), les fractions unicode (½ ¼ ¾ ⅓ ⅔),
+  // les fractions écrites (1/2) et les nombres mixtes (1 1/2). Les quantités
+  // en mots ("une pincée", "au goût") ne peuvent pas être ajustées.
+  var FRACTION_MAP = { "½":0.5, "¼":0.25, "¾":0.75, "⅓":1/3, "⅔":2/3, "⅛":0.125, "⅜":0.375, "⅝":0.625, "⅞":0.875 };
+  function parseLeadingQuantity(text){
+    var m = text.match(/^(\d+)?\s*([½¼¾⅓⅔⅛⅜⅝⅞])/);
+    if (m) return { value: (m[1] ? parseInt(m[1],10) : 0) + FRACTION_MAP[m[2]], len: m[0].length };
+    m = text.match(/^(\d+\s+)?(\d+)\s*\/\s*(\d+)/);
+    if (m) return { value: (m[1] ? parseInt(m[1],10) : 0) + (parseInt(m[2],10) / parseInt(m[3],10)), len: m[0].length };
+    m = text.match(/^(\d+(?:[.,]\d+)?)/);
+    if (m) return { value: parseFloat(m[1].replace(",", ".")), len: m[0].length };
+    return null;
+  }
+  function formatQuantity(n){
+    var whole = Math.floor(n);
+    var frac = n - whole;
+    var common = [[0.25,"¼"],[0.5,"½"],[0.75,"¾"],[1/3,"⅓"],[2/3,"⅔"]];
+    for (var i = 0; i < common.length; i++){
+      if (Math.abs(frac - common[i][0]) < 0.05) return (whole > 0 ? whole + " " : "") + common[i][1];
+    }
+    var rounded = Math.round(n * 4) / 4;
+    return (rounded % 1 === 0) ? String(rounded) : String(rounded);
+  }
   function scaleIngredientText(text, ratio){
     if (!ratio || ratio === 1) return text;
-    var m = text.match(/^(\d+(?:[.,]\d+)?)/);
-    if (!m) return text;
-    var num = parseFloat(m[1].replace(",", "."));
-    var scaled = Math.round(num * ratio * 4) / 4;
-    var display = (scaled % 1 === 0) ? String(scaled) : scaled.toFixed(2).replace(/0$/,"").replace(/\.$/,"");
-    return display + text.slice(m[0].length);
+    var parsed = parseLeadingQuantity(text);
+    if (!parsed) return text;
+    return formatQuantity(parsed.value * ratio) + text.slice(parsed.len);
   }
 
   function currentWeekIngredients(){
