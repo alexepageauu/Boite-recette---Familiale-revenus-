@@ -162,6 +162,19 @@ img{ max-width:100%; }
 }
 .discover-sidebar-item:last-child{ border-bottom:none; }
 .discover-sidebar-item:hover{ background:var(--surface-2); }
+.followed-section{ margin-bottom:22px; }
+.followed-section-title{ margin:0 0 10px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-deep); }
+.followed-list{ display:flex; gap:12px; overflow-x:auto; padding-bottom:6px; }
+.followed-item{
+  flex:0 0 160px; background:var(--surface); border:1px solid var(--line); border-radius:10px;
+  overflow:hidden; cursor:pointer; box-shadow:var(--shadow);
+}
+.followed-item img{ width:100%; height:90px; object-fit:cover; display:block; }
+.followed-item .ph-fallback{ display:flex; align-items:center; justify-content:center; height:90px; background:var(--surface-2); font-family:"Fraunces",serif; font-style:italic; color:var(--ink-faint); }
+.followed-item-body{ padding:8px 10px; }
+.followed-item-title{ font-size:12.5px; font-weight:600; margin:0 0 3px; line-height:1.3; }
+.followed-item-fam{ font-size:10.5px; color:var(--ink-faint); }
+#familyFollowBtn.following{ background:var(--pine); border-color:var(--pine); color:#fff; }
 @media(max-width:760px){
   .discover-layout{ flex-direction:column; }
   .discover-sidebar{ flex:none; width:100%; position:static; max-height:none; }

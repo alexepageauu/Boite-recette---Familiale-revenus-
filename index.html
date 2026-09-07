@@ -77,6 +77,7 @@
 
   <div class="discover-layout" id="discoverLayout" hidden>
     <div class="discover-main">
+      <div class="followed-section" id="followedSection" hidden></div>
       <div class="family-search-block" id="familySearchBlock">
         <input type="text" id="familyNameSearch" placeholder="🔍 Chercher n'importe quelle famille par son nom (même sans recette publique)…">
         <div id="familySearchResults"></div>
@@ -332,7 +333,10 @@
     </div>
     <div class="form-body">
       <p class="hint" id="familyProfileRegion" style="margin:0 0 16px;"></p>
-      <button type="button" class="btn btn-primary" id="familyGeneralRequestBtn" style="margin-bottom:16px;">📨 Envoyer une demande générale</button>
+      <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+        <button type="button" class="btn" id="familyFollowBtn"></button>
+        <button type="button" class="btn btn-primary" id="familyGeneralRequestBtn">📨 Envoyer une demande générale</button>
+      </div>
       <div id="familyProfileList"><p class="hint">Chargement…</p></div>
     </div>
   </div>

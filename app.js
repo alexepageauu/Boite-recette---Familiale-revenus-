@@ -43,7 +43,7 @@
    "familyProfileOverlay","familyProfileHeading","familyProfileClose","familyProfileRegion","familyProfileList",
    "requestAccessOverlay","requestAccessClose","requestAccessRecipeName","request-message","requestAccessCancel","requestAccessConfirm",
    "familySearchBlock","familyNameSearch","familySearchResults","familyGeneralRequestBtn",
-   "discoverLayout","discoverSidebarList"
+   "discoverLayout","discoverSidebarList","followedSection","familyFollowBtn"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -76,7 +76,9 @@
     manualGroceryItems: [],
     discoverRegion: "",
     discoverTag: "",
-    discoverSort: "recent"
+    discoverSort: "recent",
+    followedFamilyIds: [],
+    followedRecipesCache: []
   };
 
   var supabase = null;
@@ -733,6 +735,7 @@
     els.familyProfileRegion.textContent = familyRegion ? "📍 " + familyRegion : "";
     els.familyProfileList.innerHTML = '<p class="hint">Chargement…</p>';
     els.familyProfileOverlay.hidden = false;
+    renderFollowBtn(familyId);
 
     supabase.from("recipes_browse").select("*").eq("family_id", familyId).then(function(res){
       if (res.error){ els.familyProfileList.innerHTML = '<p class="hint">Impossible de charger les recettes.</p>'; return; }
@@ -773,6 +776,82 @@
       if (!currentProfileFamily) return;
       openRequestAccess(null, "Demande générale à " + currentProfileFamily.name, currentProfileFamily.id);
     });
+  }
+
+  /* ================= S'ABONNER À UNE FAMILLE ================= */
+
+  function loadFollowedFamilies(){
+    if (!supabase || !state.session) return;
+    supabase.from("family_follows").select("followed_family_id").eq("follower_user_id", state.session.user.id).then(function(res){
+      if (res.error) return;
+      state.followedFamilyIds = (res.data || []).map(function(row){ return row.followed_family_id; });
+      if (state.view === "discover") loadFollowedRecipes();
+    });
+  }
+
+  function renderFollowBtn(familyId){
+    if (!els.familyFollowBtn) return;
+    if (familyId === state.familyId){ els.familyFollowBtn.hidden = true; return; }
+    els.familyFollowBtn.hidden = false;
+    var following = state.followedFamilyIds.indexOf(familyId) !== -1;
+    els.familyFollowBtn.textContent = following ? "✅ Abonné(e) — Se désabonner" : "⭐ S'abonner à cette famille";
+    els.familyFollowBtn.classList.toggle("following", following);
+  }
+  if (els.familyFollowBtn){
+    els.familyFollowBtn.addEventListener("click", function(){
+      if (!supabase || !currentProfileFamily || !state.session) return;
+      var familyId = currentProfileFamily.id;
+      var following = state.followedFamilyIds.indexOf(familyId) !== -1;
+      if (following){
+        supabase.from("family_follows").delete().eq("follower_user_id", state.session.user.id).eq("followed_family_id", familyId).then(function(res){
+          if (res.error){ toast("Impossible de se désabonner."); return; }
+          state.followedFamilyIds = state.followedFamilyIds.filter(function(id){ return id !== familyId; });
+          renderFollowBtn(familyId);
+          loadFollowedRecipes();
+          toast("Désabonné(e) de " + currentProfileFamily.name + ".");
+        });
+      } else {
+        supabase.from("family_follows").insert({ follower_user_id: state.session.user.id, followed_family_id: familyId }).then(function(res){
+          if (res.error){ toast("Impossible de s'abonner."); return; }
+          state.followedFamilyIds.push(familyId);
+          renderFollowBtn(familyId);
+          loadFollowedRecipes();
+          toast("Abonné(e) à " + currentProfileFamily.name + " !");
+        });
+      }
+    });
+  }
+
+  function loadFollowedRecipes(){
+    if (!supabase || !els.followedSection) return;
+    if (!state.followedFamilyIds.length){ els.followedSection.hidden = true; return; }
+    supabase.from("recipes").select("*, families(name)")
+      .in("family_id", state.followedFamilyIds)
+      .eq("visibility", "public")
+      .order("created_at", { ascending: false })
+      .limit(12)
+      .then(function(res){
+        if (res.error || !res.data || !res.data.length){ els.followedSection.hidden = true; return; }
+        state.followedRecipesCache = res.data;
+        els.followedSection.hidden = false;
+        els.followedSection.innerHTML =
+          '<p class="followed-section-title">⭐ Nouveautés de vos familles suivies</p>' +
+          '<div class="followed-list">' +
+            res.data.map(function(r){
+              var photoHtml = r.photo_url ? '<img src="' + esc(r.photo_url) + '" alt="">' : '<span class="ph-fallback">' + esc(initialsWord(r.title)) + '</span>';
+              return '<div class="followed-item" data-followed-open="' + r.id + '">' +
+                photoHtml +
+                '<div class="followed-item-body">' +
+                  '<p class="followed-item-title">' + esc(r.title) + '</p>' +
+                  '<p class="followed-item-fam">👪 ' + esc(r.families ? r.families.name : "") + '</p>' +
+                '</div>' +
+              '</div>';
+            }).join("") +
+          '</div>';
+        els.followedSection.querySelectorAll("[data-followed-open]").forEach(function(el){
+          el.addEventListener("click", function(){ openDiscoverDetail(el.getAttribute("data-followed-open")); });
+        });
+      });
   }
 
   /* ================= CHERCHER UNE FAMILLE PAR NOM ================= */
@@ -1284,7 +1363,7 @@
       : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Ajouter une recette';
 
     if (recipeMode){ renderGrid(); renderFeatured(); }
-    else if (discoverMode){ renderDiscoverFilters(); renderDiscoverGrid(); loadDiscoverRecipes(); loadDiscoverSidebar(); }
+    else if (discoverMode){ renderDiscoverFilters(); renderDiscoverGrid(); loadDiscoverRecipes(); loadDiscoverSidebar(); loadFollowedRecipes(); }
     else if (plannerMode){ renderPlanner(); loadMealPlan(); }
     else { renderBlogList(); loadBlogPosts(); }
   }
@@ -1635,6 +1714,7 @@
     loadBlogPosts();
     loadFavorites();
     loadPendingCount();
+    loadFollowedFamilies();
   }
 
   els.famSubmit.addEventListener("click", function(){
@@ -1829,7 +1909,8 @@
   }
 
   function findDiscoverRecipe(id){
-    return state.discoverRecipes.filter(function(r){ return r.id === id; })[0];
+    return state.discoverRecipes.filter(function(r){ return r.id === id; })[0]
+      || (state.followedRecipesCache || []).filter(function(r){ return r.id === id; })[0];
   }
 
   function copyRecipeToMyFamily(r){
