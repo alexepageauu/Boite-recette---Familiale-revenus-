@@ -44,7 +44,10 @@
    "requestAccessOverlay","requestAccessClose","requestAccessRecipeName","request-message","requestAccessCancel","requestAccessConfirm",
    "familySearchBlock","familyNameSearch","familySearchResults","familyGeneralRequestBtn",
    "discoverLayout","discoverSidebarList","followedSection","familyFollowBtn",
-   "authRequiredScreen","authRequiredBtn","controlsWrap","mainContent"
+   "authRequiredScreen","authRequiredBtn","controlsWrap","mainContent",
+   "famRegionEdit","famRegionSaveBtn","myFollowsLink",
+   "myFollowsOverlay","myFollowsClose","myFollowsList","myFollowsBellBtn","followCount",
+   "familyProfileFollowers"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -68,6 +71,7 @@
     familyName: "",
     familyInviteCode: "",
     isAdminFamily: false,
+    familyRegion: "",
     famOnboardMode: "create",
     openRecipeId: null,
     plannerWeekOffset: 0,
@@ -731,13 +735,15 @@
 
   var currentProfileFamily = null;
 
-  function openFamilyProfile(familyId, familyName, familyRegion){
+  function openFamilyProfile(familyId, familyName, familyRegion, isAdminFamily){
     currentProfileFamily = { id: familyId, name: familyName, region: familyRegion };
-    els.familyProfileHeading.textContent = "👪 " + familyName;
+    els.familyProfileHeading.innerHTML = "👪 " + esc(familyName) + (isAdminFamily === "true" || isAdminFamily === true ? ' <span class="fam-verified-badge" title="Famille officielle">✅ Officielle</span>' : '');
     els.familyProfileRegion.textContent = familyRegion ? "📍 " + familyRegion : "";
+    if (els.familyProfileFollowers) els.familyProfileFollowers.textContent = "";
     els.familyProfileList.innerHTML = '<p class="hint">Chargement…</p>';
     els.familyProfileOverlay.hidden = false;
     renderFollowBtn(familyId);
+    refreshFamilyProfileFollowerCount(familyId);
 
     supabase.from("recipes_browse").select("*").eq("family_id", familyId).then(function(res){
       if (res.error){ els.familyProfileList.innerHTML = '<p class="hint">Impossible de charger les recettes.</p>'; return; }
@@ -748,11 +754,11 @@
         var mine = state.recipes.some(function(mr){ return mr.id === r.id; });
         var unlocked = isPublic || mine;
         return '<div class="browse-recipe-row' + (unlocked ? '' : ' locked') + '">' +
-          '<span class="browse-title">' + (unlocked ? '' : '🔒 ') + esc(r.title) + '</span>' +
+          '<span class="browse-title">' + (unlocked ? '' : (r.visibility === "personal" ? '🙈 ' : '🔒 ')) + esc(r.title) + '</span>' +
           '<span class="browse-meta">' + esc(r.category || "") + '</span>' +
           (unlocked
             ? '<button type="button" class="btn" data-browse-open="' + r.id + '" data-browse-public="' + isPublic + '">Voir</button>'
-            : '<button type="button" class="btn" data-browse-request="' + r.id + '" data-browse-title="' + esc(r.title) + '">Demander l\'accès</button>') +
+            : '<button type="button" class="btn" data-browse-request="' + r.id + '" data-browse-title="' + esc(r.title) + '" data-browse-personal="' + (r.visibility === "personal") + '" data-browse-creator="' + (r.created_by || "") + '">Demander l\'accès</button>') +
         '</div>';
       }).join("");
 
@@ -766,7 +772,9 @@
       });
       els.familyProfileList.querySelectorAll("[data-browse-request]").forEach(function(btn){
         btn.addEventListener("click", function(){
-          openRequestAccess(btn.getAttribute("data-browse-request"), btn.getAttribute("data-browse-title"), familyId);
+          var isPersonal = btn.getAttribute("data-browse-personal") === "true";
+          var creatorId = btn.getAttribute("data-browse-creator");
+          openRequestAccess(btn.getAttribute("data-browse-request"), btn.getAttribute("data-browse-title"), familyId, isPersonal ? creatorId : null);
         });
       });
     });
@@ -787,6 +795,14 @@
     supabase.from("family_follows").select("followed_family_id").eq("follower_user_id", state.session.user.id).then(function(res){
       if (res.error) return;
       state.followedFamilyIds = (res.data || []).map(function(row){ return row.followed_family_id; });
+      if (els.followCount){
+        if (state.followedFamilyIds.length){
+          els.followCount.hidden = false;
+          els.followCount.textContent = state.followedFamilyIds.length;
+        } else {
+          els.followCount.hidden = true;
+        }
+      }
       if (state.view === "discover") loadFollowedRecipes();
     });
   }
@@ -810,6 +826,8 @@
           state.followedFamilyIds = state.followedFamilyIds.filter(function(id){ return id !== familyId; });
           renderFollowBtn(familyId);
           loadFollowedRecipes();
+          loadFollowedFamilies();
+          refreshFamilyProfileFollowerCount(familyId);
           toast("Désabonné(e) de " + currentProfileFamily.name + ".");
         });
       } else {
@@ -818,11 +836,53 @@
           state.followedFamilyIds.push(familyId);
           renderFollowBtn(familyId);
           loadFollowedRecipes();
+          loadFollowedFamilies();
+          refreshFamilyProfileFollowerCount(familyId);
           toast("Abonné(e) à " + currentProfileFamily.name + " !");
         });
       }
     });
   }
+
+  function refreshFamilyProfileFollowerCount(familyId){
+    if (!els.familyProfileFollowers || !supabase) return;
+    supabase.rpc("search_families", { query: currentProfileFamily ? currentProfileFamily.name : "" }).then(function(res){
+      if (res.error || !res.data) return;
+      var match = res.data.filter(function(f){ return f.id === familyId; })[0];
+      if (match) els.familyProfileFollowers.textContent = "⭐ " + match.follower_count + " abonné(e)" + (match.follower_count > 1 ? "s" : "");
+    });
+  }
+
+  function openMyFollowsList(){
+    els.myFollowsOverlay.hidden = false;
+    els.myFollowsList.innerHTML = '<p class="hint">Chargement…</p>';
+    if (!state.followedFamilyIds.length){
+      els.myFollowsList.innerHTML = '<p class="hint">Tu ne suis encore aucune famille — trouve-en une dans Découvrir !</p>';
+      return;
+    }
+    supabase.rpc("search_families", { query: "" }).then(function(res){
+      if (res.error){ els.myFollowsList.innerHTML = '<p class="hint">Impossible de charger.</p>'; return; }
+      var rows = (res.data || []).filter(function(f){ return state.followedFamilyIds.indexOf(f.id) !== -1; });
+      if (!rows.length){ els.myFollowsList.innerHTML = '<p class="hint">Tu ne suis encore aucune famille.</p>'; return; }
+      els.myFollowsList.innerHTML = rows.map(function(f){
+        return '<div class="fam-result-row">' +
+          '<div><span class="fam-result-name">👪 ' + esc(f.name) + '</span>' +
+          (f.is_admin_family ? ' <span class="fam-verified-badge">✅ Officielle</span>' : '') +
+          (f.region ? ' <span class="fam-result-region">📍 ' + esc(f.region) + '</span>' : '') + '</div>' +
+          '<button type="button" class="btn" data-myfollow-open="' + f.id + '" data-myfollow-name="' + esc(f.name) + '" data-myfollow-region="' + esc(f.region || "") + '" data-myfollow-admin="' + !!f.is_admin_family + '">Voir</button>' +
+        '</div>';
+      }).join("");
+      els.myFollowsList.querySelectorAll("[data-myfollow-open]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          els.myFollowsOverlay.hidden = true;
+          openFamilyProfile(btn.getAttribute("data-myfollow-open"), btn.getAttribute("data-myfollow-name"), btn.getAttribute("data-myfollow-region"), btn.getAttribute("data-myfollow-admin"));
+        });
+      });
+    });
+  }
+  if (els.myFollowsBellBtn) els.myFollowsBellBtn.addEventListener("click", openMyFollowsList);
+  if (els.myFollowsClose) els.myFollowsClose.addEventListener("click", function(){ els.myFollowsOverlay.hidden = true; });
+  if (els.myFollowsOverlay) els.myFollowsOverlay.addEventListener("click", function(e){ if (e.target === els.myFollowsOverlay) els.myFollowsOverlay.hidden = true; });
 
   function loadFollowedRecipes(){
     if (!supabase || !els.followedSection) return;
@@ -863,13 +923,14 @@
     els.familySearchResults.innerHTML = rows.map(function(f){
       return '<div class="fam-result-row">' +
         '<div><span class="fam-result-name">👪 ' + esc(f.name) + '</span>' +
+        (f.is_admin_family ? ' <span class="fam-verified-badge" title="Famille officielle">✅ Officielle</span>' : '') +
         (f.region ? ' <span class="fam-result-region">📍 ' + esc(f.region) + '</span>' : '') + '</div>' +
-        '<button type="button" class="btn" data-fam-result="' + f.id + '" data-fam-result-name="' + esc(f.name) + '" data-fam-result-region="' + esc(f.region || "") + '">Voir le profil</button>' +
+        '<button type="button" class="btn" data-fam-result="' + f.id + '" data-fam-result-name="' + esc(f.name) + '" data-fam-result-region="' + esc(f.region || "") + '" data-fam-result-admin="' + !!f.is_admin_family + '">Voir le profil</button>' +
       '</div>';
     }).join("");
     els.familySearchResults.querySelectorAll("[data-fam-result]").forEach(function(btn){
       btn.addEventListener("click", function(){
-        openFamilyProfile(btn.getAttribute("data-fam-result"), btn.getAttribute("data-fam-result-name"), btn.getAttribute("data-fam-result-region"));
+        openFamilyProfile(btn.getAttribute("data-fam-result"), btn.getAttribute("data-fam-result-name"), btn.getAttribute("data-fam-result-region"), btn.getAttribute("data-fam-result-admin"));
       });
     });
   }
@@ -897,14 +958,14 @@
       rows.sort(function(a,b){ return a.name.localeCompare(b.name); });
       if (!rows.length){ els.discoverSidebarList.innerHTML = '<p class="hint">Aucune autre famille inscrite pour l\'instant.</p>'; return; }
       els.discoverSidebarList.innerHTML = rows.map(function(f){
-        return '<button type="button" class="discover-sidebar-item" data-sidebar-fam="' + f.id + '" data-sidebar-fam-name="' + esc(f.name) + '" data-sidebar-fam-region="' + esc(f.region || "") + '">' +
-          '<span class="fam-result-name">👪 ' + esc(f.name) + '</span>' +
+        return '<button type="button" class="discover-sidebar-item" data-sidebar-fam="' + f.id + '" data-sidebar-fam-name="' + esc(f.name) + '" data-sidebar-fam-region="' + esc(f.region || "") + '" data-sidebar-fam-admin="' + !!f.is_admin_family + '">' +
+          '<span class="fam-result-name">👪 ' + esc(f.name) + (f.is_admin_family ? ' <span class="fam-verified-badge" title="Famille officielle">✅</span>' : '') + '</span>' +
           (f.region ? '<span class="fam-result-region">📍 ' + esc(f.region) + '</span>' : '') +
         '</button>';
       }).join("");
       els.discoverSidebarList.querySelectorAll("[data-sidebar-fam]").forEach(function(btn){
         btn.addEventListener("click", function(){
-          openFamilyProfile(btn.getAttribute("data-sidebar-fam"), btn.getAttribute("data-sidebar-fam-name"), btn.getAttribute("data-sidebar-fam-region"));
+          openFamilyProfile(btn.getAttribute("data-sidebar-fam"), btn.getAttribute("data-sidebar-fam-name"), btn.getAttribute("data-sidebar-fam-region"), btn.getAttribute("data-sidebar-fam-admin"));
         });
       });
     });
@@ -914,15 +975,17 @@
 
   var pendingRequestRecipeId = null;
   var pendingRequestFamilyId = null;
-  function openRequestAccess(recipeId, label, targetFamilyId){
+  var pendingRequestUserId = null;
+  function openRequestAccess(recipeId, label, targetFamilyId, targetUserId){
     if (!state.session){ openAuth("login"); return; }
     pendingRequestRecipeId = recipeId;
     pendingRequestFamilyId = targetFamilyId;
-    els.requestAccessRecipeName.textContent = recipeId ? "Recette : " + label : label;
+    pendingRequestUserId = targetUserId || null;
+    els.requestAccessRecipeName.textContent = recipeId ? "Recette : " + label + (pendingRequestUserId ? " (recette personnelle — la demande ira seulement à son auteur)" : "") : label;
     els["request-message"].value = "";
     els.requestAccessOverlay.hidden = false;
   }
-  function closeRequestAccess(){ els.requestAccessOverlay.hidden = true; pendingRequestRecipeId = null; pendingRequestFamilyId = null; }
+  function closeRequestAccess(){ els.requestAccessOverlay.hidden = true; pendingRequestRecipeId = null; pendingRequestFamilyId = null; pendingRequestUserId = null; }
   els.requestAccessClose.addEventListener("click", closeRequestAccess);
   els.requestAccessCancel.addEventListener("click", closeRequestAccess);
   els.requestAccessOverlay.addEventListener("click", function(e){ if (e.target === els.requestAccessOverlay) closeRequestAccess(); });
@@ -931,13 +994,14 @@
     supabase.from("access_requests").insert({
       recipe_id: pendingRequestRecipeId,
       target_family_id: pendingRequestFamilyId,
+      target_user_id: pendingRequestUserId,
       requested_by: state.session.user.id,
       requester_family_id: state.familyId,
       message: els["request-message"].value.trim() || null
     }).then(function(res){
       if (res.error){ toast("La demande n'a pas pu être envoyée — " + res.error.message); return; }
       closeRequestAccess();
-      toast("Demande envoyée ! Tu verras la réponse dans tes notifications 🔔.");
+      toast(pendingRequestUserId ? "Demande envoyée directement à cette personne !" : "Demande envoyée à toute la famille !");
     });
   });
 
@@ -945,16 +1009,12 @@
 
   var notifTab = "received";
   function loadPendingCount(){
-    if (!supabase || !state.familyId) return;
-    supabase.from("access_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "pending")
-      .eq("target_family_id", state.familyId)
-      .then(function(res){
-        var n = res.count || 0;
-        if (n > 0){ els.notifCount.hidden = false; els.notifCount.textContent = n; }
-        else { els.notifCount.hidden = true; }
-      });
+    if (!supabase || !state.session) return;
+    supabase.rpc("my_pending_request_count").then(function(res){
+      var n = res.data || 0;
+      if (n > 0){ els.notifCount.hidden = false; els.notifCount.textContent = n; }
+      else { els.notifCount.hidden = true; }
+    });
   }
 
   function renderNotifBody(){
@@ -965,7 +1025,7 @@
     if (notifTab === "received"){
       supabase.from("access_requests")
         .select("*, recipes(title), requester:requester_family_id(name)")
-        .eq("target_family_id", state.familyId)
+        .neq("requested_by", state.session.user.id)
         .order("created_at", { ascending: false })
         .then(function(res){
           if (res.error){ els.notifBody.innerHTML = '<p class="hint">Impossible de charger les demandes.</p>'; return; }
@@ -974,11 +1034,12 @@
           els.notifBody.innerHTML = rows.map(function(row){
             var famName = row.requester ? row.requester.name : "Une famille";
             var what = row.recipes ? "à <b>" + esc(row.recipes.title) + "</b>" : "une demande générale";
+            var personalNote = row.target_user_id ? ' <span class="hint">(recette personnelle — envoyée à toi seul(e))</span>' : '';
             var actions = row.status === "pending"
               ? '<div class="notif-actions"><button class="btn btn-primary" data-approve="' + row.id + '" type="button">Approuver</button><button class="btn" data-decline="' + row.id + '" type="button">Refuser</button></div>'
               : '<span class="notif-status ' + row.status + '">' + (row.status === "approved" ? "Approuvée" : "Refusée") + '</span>';
             return '<div class="notif-item">' +
-              '<p><b>' + esc(famName) + '</b> a demandé l\'accès ' + what + '</p>' +
+              '<p><b>' + esc(famName) + '</b> a demandé l\'accès ' + what + personalNote + '</p>' +
               (row.message ? '<p class="hint">« ' + esc(row.message) + ' »</p>' : '') +
               actions +
             '</div>';
@@ -1690,19 +1751,40 @@
       els.familyBadgeBtn.textContent = "👪 " + state.familyName;
       els.familyBadgeBtn.hidden = false;
       if (els.notifBellBtn) els.notifBellBtn.hidden = false;
+      if (els.myFollowsBellBtn) els.myFollowsBellBtn.hidden = false;
     } else {
       els.familyBadgeBtn.hidden = true;
       if (els.notifBellBtn) els.notifBellBtn.hidden = true;
+      if (els.myFollowsBellBtn) els.myFollowsBellBtn.hidden = true;
     }
   }
 
   els.familyBadgeBtn.addEventListener("click", function(){
     els.famInfoHeading.textContent = state.familyName;
     els.famInviteCodeBox.textContent = state.familyInviteCode || "—";
+    if (els.famRegionEdit) els.famRegionEdit.value = state.familyRegion || "";
     els.familyInfoOverlay.hidden = false;
   });
   els.famInfoClose.addEventListener("click", function(){ els.familyInfoOverlay.hidden = true; });
   els.familyInfoOverlay.addEventListener("click", function(e){ if (e.target === els.familyInfoOverlay) els.familyInfoOverlay.hidden = true; });
+  if (els.famRegionSaveBtn){
+    els.famRegionSaveBtn.addEventListener("click", function(){
+      var newRegion = els.famRegionEdit.value;
+      if (!supabase || !state.familyId) return;
+      supabase.from("families").update({ region: newRegion || null }).eq("id", state.familyId).then(function(res){
+        if (res.error){ toast("Impossible d'enregistrer la région — " + res.error.message); return; }
+        state.familyRegion = newRegion;
+        toast("Région enregistrée !");
+      });
+    });
+  }
+  if (els.myFollowsLink){
+    els.myFollowsLink.addEventListener("click", function(e){
+      e.preventDefault();
+      els.familyInfoOverlay.hidden = true;
+      openMyFollowsList();
+    });
+  }
   if (els.famCopyLinkBtn){
     els.famCopyLinkBtn.addEventListener("click", function(){
       if (!state.familyInviteCode) return;
@@ -1715,11 +1797,12 @@
     });
   }
 
-  function enterFamily(id, name, code, isAdmin){
+  function enterFamily(id, name, code, isAdmin, region){
     state.familyId = id;
     state.familyName = name;
     state.familyInviteCode = code || state.familyInviteCode;
     state.isAdminFamily = !!isAdmin;
+    state.familyRegion = region || "";
     renderFamilyBadge();
     els.familyOnboardingOverlay.hidden = true;
     loadRecipes();
@@ -1737,8 +1820,15 @@
 
     if (state.famOnboardMode === "create"){
       var name = els["fam-name"].value.trim();
+      var regionVal = document.getElementById("fam-region").value;
       if (!name){ els.famSubmit.disabled = false; return; }
-      supabase.rpc("create_family", { family_name: name, family_region: document.getElementById("fam-region").value || null }).then(function(res){
+      if (!regionVal){
+        els.famError.textContent = "Choisis la région de ta famille — c'est obligatoire.";
+        els.famError.hidden = false;
+        els.famSubmit.disabled = false;
+        return;
+      }
+      supabase.rpc("create_family", { family_name: name, family_region: regionVal }).then(function(res){
         els.famSubmit.disabled = false;
         if (res.error || !res.data || !res.data.length){
           els.famError.textContent = "Impossible de créer la famille — " + (res.error ? res.error.message : "erreur inconnue");
@@ -1746,7 +1836,7 @@
           return;
         }
         var row = res.data[0];
-        enterFamily(row.family_id, name, row.invite_code);
+        enterFamily(row.family_id, name, row.invite_code, false, regionVal);
         toast("Famille créée !");
       });
     } else {
@@ -1760,7 +1850,7 @@
           return;
         }
         var row = res.data[0];
-        enterFamily(row.family_id, row.family_name, null);
+        enterFamily(row.family_id, row.family_name, null, false, row.family_region);
         toast("Tu as rejoint " + row.family_name + " !");
       });
     }
@@ -1768,7 +1858,7 @@
 
   function checkFamilyMembership(){
     if (!supabase || !state.session) return;
-    supabase.from("family_members").select("family_id, families(name, invite_code, is_admin_family)").eq("user_id", state.session.user.id).then(function(res){
+    supabase.from("family_members").select("family_id, families(name, invite_code, is_admin_family, region)").eq("user_id", state.session.user.id).then(function(res){
       if (res.error) return;
       var rows = res.data || [];
       if (!rows.length){
@@ -1787,7 +1877,7 @@
         return;
       }
       var fam = rows[0].families;
-      enterFamily(rows[0].family_id, fam ? fam.name : "", fam ? fam.invite_code : "", fam ? fam.is_admin_family : false);
+      enterFamily(rows[0].family_id, fam ? fam.name : "", fam ? fam.invite_code : "", fam ? fam.is_admin_family : false, fam ? fam.region : "");
     });
   }
 
@@ -2045,7 +2135,7 @@
   function loadMealPlan(){
     if (!supabase || !state.familyId) return;
     var days = currentWeekDates();
-    supabase.from("meal_plan").select("*").eq("family_id", state.familyId)
+    supabase.from("meal_plan_display").select("*").eq("family_id", state.familyId)
       .gte("plan_date", isoDate(days[0])).lte("plan_date", isoDate(days[6]))
       .then(function(res){
         if (res.error) return;
@@ -2278,8 +2368,7 @@
       var slotsHtml = MEAL_SLOTS.map(function(slotDef){
         var entry = state.mealPlan[mealKey(iso, slotDef.key)];
         var isLeftover = entry && entry.is_leftovers;
-        var recipe = entry && entry.recipe_id ? state.recipes.filter(function(r){ return r.id === entry.recipe_id; })[0] : null;
-        var searchValue = recipe ? recipe.title : "";
+        var searchValue = (entry && entry.recipe_id && entry.recipe_title) ? entry.recipe_title : "";
         var showServings = !!(entry && !isLeftover && entry.recipe_id);
         return '<div class="planner-slot">' +
           '<label class="planner-slot-label">' + slotDef.icon + ' ' + slotDef.label + '</label>' +

@@ -29,6 +29,7 @@
       <div class="count-badge" id="countBadge"><b>0</b> recette</div>
       <button class="family-badge" id="familyBadgeBtn" type="button" hidden></button>
       <button class="notif-bell" id="notifBellBtn" type="button" hidden>🔔<span class="notif-count" id="notifCount" hidden>0</span></button>
+      <button class="notif-bell" id="myFollowsBellBtn" type="button" hidden title="Mes abonnements">⭐<span class="notif-count" id="followCount" hidden>0</span></button>
       <div class="auth-widget" id="authWidget">
         <button class="auth-link" id="authOpenBtn" type="button">Se connecter / créer un compte</button>
       </div>
@@ -284,9 +285,9 @@
       <div class="field" id="famCreateField">
         <label for="fam-name">Nom de ta famille</label>
         <input type="text" id="fam-name" maxlength="60" placeholder="Ex. Famille Pageau">
-        <label for="fam-region" style="margin-top:10px;">Région <span class="hint">(facultatif — pour apparaître dans Découvrir par région)</span></label>
-        <select id="fam-region">
-          <option value="">— Non précisé —</option>
+        <label for="fam-region" style="margin-top:10px;">Région</label>
+        <select id="fam-region" required>
+          <option value="" disabled selected>— Choisis ta région —</option>
           <option>Bas-Saint-Laurent</option>
           <option>Saguenay–Lac-Saint-Jean</option>
           <option>Capitale-Nationale</option>
@@ -326,11 +327,49 @@
       <button class="sheet-close" id="famInfoClose" type="button" aria-label="Fermer">&times;</button>
     </div>
     <div class="form-body">
+      <div class="field" style="margin-bottom:16px;">
+        <label for="famRegionEdit">Région de ta famille</label>
+        <select id="famRegionEdit">
+          <option value="">— Non précisée —</option>
+          <option>Bas-Saint-Laurent</option>
+          <option>Saguenay–Lac-Saint-Jean</option>
+          <option>Capitale-Nationale</option>
+          <option>Mauricie</option>
+          <option>Estrie</option>
+          <option>Montréal</option>
+          <option>Outaouais</option>
+          <option>Abitibi-Témiscamingue</option>
+          <option>Côte-Nord</option>
+          <option>Nord-du-Québec</option>
+          <option>Gaspésie–Îles-de-la-Madeleine</option>
+          <option>Chaudière-Appalaches</option>
+          <option>Laval</option>
+          <option>Lanaudière</option>
+          <option>Laurentides</option>
+          <option>Montérégie</option>
+          <option>Centre-du-Québec</option>
+          <option>Hors Québec</option>
+        </select>
+        <button type="button" class="btn" id="famRegionSaveBtn" style="margin-top:8px;">Enregistrer la région</button>
+      </div>
       <p class="hint" style="margin:0;">Partage ce code avec les personnes que tu veux inviter dans ce carnet — elles n'ont qu'à choisir « Rejoindre avec un code » en créant leur compte.</p>
       <div class="invite-code-box" id="famInviteCodeBox"></div>
       <button type="button" class="btn btn-primary" id="famCopyLinkBtn" style="width:100%;margin-top:12px;">🔗 Copier le lien d'invitation</button>
       <p class="hint" style="margin:8px 0 0;">Envoie ce lien par texto ou courriel — la personne n'aura qu'à créer son compte, elle rejoindra directement votre famille sans taper de code.</p>
+
+      <p class="hint" style="margin:20px 0 0;">👥 Suis-tu d'autres familles ? <a href="#" id="myFollowsLink">Voir mes abonnements</a></p>
     </div>
+  </div>
+</div>
+
+<!-- mes abonnements -->
+<div class="overlay" id="myFollowsOverlay" hidden>
+  <div class="sheet" style="max-width:420px;">
+    <div class="sheet-head">
+      <h2 class="display" style="margin:0;font-size:19px;">⭐ Mes abonnements</h2>
+      <button class="sheet-close" id="myFollowsClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="form-body" id="myFollowsList"><p class="hint">Chargement…</p></div>
   </div>
 </div>
 
@@ -342,7 +381,8 @@
       <button class="sheet-close" id="familyProfileClose" type="button" aria-label="Fermer">&times;</button>
     </div>
     <div class="form-body">
-      <p class="hint" id="familyProfileRegion" style="margin:0 0 16px;"></p>
+      <p class="hint" id="familyProfileRegion" style="margin:0 0 4px;"></p>
+      <p class="hint" id="familyProfileFollowers" style="margin:0 0 16px;"></p>
       <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
         <button type="button" class="btn" id="familyFollowBtn"></button>
         <button type="button" class="btn btn-primary" id="familyGeneralRequestBtn">📨 Envoyer une demande générale</button>
