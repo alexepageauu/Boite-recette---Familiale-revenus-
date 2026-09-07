@@ -38,7 +38,10 @@
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
    "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility","memoryBanner","plannerView",
    "addToPlannerOverlay","addToPlannerClose","atp-day","atp-slot","atp-servings","atpCancel","atpConfirm",
-   "reportOverlay","reportClose","report-reason","reportError","reportCancel","reportConfirm","famCopyLinkBtn","discoverFilters"
+   "reportOverlay","reportClose","report-reason","reportError","reportCancel","reportConfirm","famCopyLinkBtn","discoverFilters",
+   "notifBellBtn","notifCount","notifOverlay","notifClose","notifTabReceived","notifTabSent","notifBody",
+   "familyProfileOverlay","familyProfileHeading","familyProfileClose","familyProfileRegion","familyProfileList",
+   "requestAccessOverlay","requestAccessClose","requestAccessRecipeName","request-message","requestAccessCancel","requestAccessConfirm"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -723,6 +726,182 @@
     });
   });
 
+  /* ================= PROFIL DE FAMILLE (parcourir) ================= */
+
+  function openFamilyProfile(familyId, familyName, familyRegion){
+    els.familyProfileHeading.textContent = "👪 " + familyName;
+    els.familyProfileRegion.textContent = familyRegion ? "📍 " + familyRegion : "";
+    els.familyProfileList.innerHTML = '<p class="hint">Chargement…</p>';
+    els.familyProfileOverlay.hidden = false;
+
+    supabase.from("recipes_browse").select("*").eq("family_id", familyId).then(function(res){
+      if (res.error){ els.familyProfileList.innerHTML = '<p class="hint">Impossible de charger les recettes.</p>'; return; }
+      var list = sortByDate(res.data || []);
+      if (!list.length){ els.familyProfileList.innerHTML = '<p class="hint">Aucune recette à afficher.</p>'; return; }
+      els.familyProfileList.innerHTML = list.map(function(r){
+        var isPublic = r.visibility === "public";
+        var mine = state.recipes.some(function(mr){ return mr.id === r.id; });
+        var unlocked = isPublic || mine;
+        return '<div class="browse-recipe-row' + (unlocked ? '' : ' locked') + '">' +
+          '<span class="browse-title">' + (unlocked ? '' : '🔒 ') + esc(r.title) + '</span>' +
+          '<span class="browse-meta">' + esc(r.category || "") + '</span>' +
+          (unlocked
+            ? '<button type="button" class="btn" data-browse-open="' + r.id + '" data-browse-public="' + isPublic + '">Voir</button>'
+            : '<button type="button" class="btn" data-browse-request="' + r.id + '" data-browse-title="' + esc(r.title) + '">Demander l\'accès</button>') +
+        '</div>';
+      }).join("");
+
+      els.familyProfileList.querySelectorAll("[data-browse-open]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          var id = btn.getAttribute("data-browse-open");
+          els.familyProfileOverlay.hidden = true;
+          if (btn.getAttribute("data-browse-public") === "true") openDiscoverDetail(id);
+          else openDetail(id);
+        });
+      });
+      els.familyProfileList.querySelectorAll("[data-browse-request]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          openRequestAccess(btn.getAttribute("data-browse-request"), btn.getAttribute("data-browse-title"));
+        });
+      });
+    });
+  }
+  els.familyProfileClose.addEventListener("click", function(){ els.familyProfileOverlay.hidden = true; });
+  els.familyProfileOverlay.addEventListener("click", function(e){ if (e.target === els.familyProfileOverlay) els.familyProfileOverlay.hidden = true; });
+
+  /* ================= DEMANDER L'ACCÈS ================= */
+
+  var pendingRequestRecipeId = null;
+  function openRequestAccess(recipeId, recipeTitle){
+    if (!state.session){ openAuth("login"); return; }
+    pendingRequestRecipeId = recipeId;
+    els.requestAccessRecipeName.textContent = "Recette : " + recipeTitle;
+    els["request-message"].value = "";
+    els.requestAccessOverlay.hidden = false;
+  }
+  function closeRequestAccess(){ els.requestAccessOverlay.hidden = true; pendingRequestRecipeId = null; }
+  els.requestAccessClose.addEventListener("click", closeRequestAccess);
+  els.requestAccessCancel.addEventListener("click", closeRequestAccess);
+  els.requestAccessOverlay.addEventListener("click", function(e){ if (e.target === els.requestAccessOverlay) closeRequestAccess(); });
+  els.requestAccessConfirm.addEventListener("click", function(){
+    if (!supabase || !pendingRequestRecipeId || !state.session) return;
+    supabase.from("access_requests").insert({
+      recipe_id: pendingRequestRecipeId,
+      requested_by: state.session.user.id,
+      requester_family_id: state.familyId,
+      message: els["request-message"].value.trim() || null
+    }).then(function(res){
+      if (res.error){ toast("La demande n'a pas pu être envoyée — " + res.error.message); return; }
+      closeRequestAccess();
+      toast("Demande envoyée ! Tu verras la réponse dans tes notifications 🔔.");
+    });
+  });
+
+  /* ================= BOÎTE DE RÉCEPTION (🔔) ================= */
+
+  var notifTab = "received";
+  function loadPendingCount(){
+    if (!supabase || !state.familyId) return;
+    supabase.from("access_requests")
+      .select("id, recipes!inner(family_id)", { count: "exact", head: true })
+      .eq("status", "pending")
+      .eq("recipes.family_id", state.familyId)
+      .then(function(res){
+        var n = res.count || 0;
+        if (n > 0){ els.notifCount.hidden = false; els.notifCount.textContent = n; }
+        else { els.notifCount.hidden = true; }
+      });
+  }
+
+  function renderNotifBody(){
+    els.notifBody.innerHTML = '<p class="hint">Chargement…</p>';
+    els.notifTabReceived.classList.toggle("active", notifTab === "received");
+    els.notifTabSent.classList.toggle("active", notifTab === "sent");
+
+    if (notifTab === "received"){
+      supabase.from("access_requests")
+        .select("*, recipes!inner(title, family_id), requester:requester_family_id(name)")
+        .eq("recipes.family_id", state.familyId)
+        .order("created_at", { ascending: false })
+        .then(function(res){
+          if (res.error){ els.notifBody.innerHTML = '<p class="hint">Impossible de charger les demandes.</p>'; return; }
+          var rows = res.data || [];
+          if (!rows.length){ els.notifBody.innerHTML = '<p class="hint">Aucune demande reçue pour l\'instant.</p>'; return; }
+          els.notifBody.innerHTML = rows.map(function(row){
+            var famName = row.requester ? row.requester.name : "Une famille";
+            var actions = row.status === "pending"
+              ? '<div class="notif-actions"><button class="btn btn-primary" data-approve="' + row.id + '" type="button">Approuver</button><button class="btn" data-decline="' + row.id + '" type="button">Refuser</button></div>'
+              : '<span class="notif-status ' + row.status + '">' + (row.status === "approved" ? "Approuvée" : "Refusée") + '</span>';
+            return '<div class="notif-item">' +
+              '<p><b>' + esc(famName) + '</b> a demandé l\'accès à <b>' + esc(row.recipes.title) + '</b></p>' +
+              (row.message ? '<p class="hint">« ' + esc(row.message) + ' »</p>' : '') +
+              actions +
+            '</div>';
+          }).join("");
+          els.notifBody.querySelectorAll("[data-approve]").forEach(function(btn){
+            btn.addEventListener("click", function(){ respondToRequest(btn.getAttribute("data-approve"), true); });
+          });
+          els.notifBody.querySelectorAll("[data-decline]").forEach(function(btn){
+            btn.addEventListener("click", function(){ respondToRequest(btn.getAttribute("data-decline"), false); });
+          });
+        });
+    } else {
+      supabase.from("access_requests")
+        .select("*, recipes(title)")
+        .eq("requested_by", state.session.user.id)
+        .order("created_at", { ascending: false })
+        .then(function(res){
+          if (res.error){ els.notifBody.innerHTML = '<p class="hint">Impossible de charger tes demandes.</p>'; return; }
+          var rows = res.data || [];
+          if (!rows.length){ els.notifBody.innerHTML = '<p class="hint">Tu n\'as envoyé aucune demande pour l\'instant.</p>'; return; }
+          els.notifBody.innerHTML = rows.map(function(row){
+            var label = row.status === "pending" ? "En attente" : (row.status === "approved" ? "Approuvée" : "Refusée");
+            return '<div class="notif-item">' +
+              '<p>Demande pour <b>' + esc(row.recipes ? row.recipes.title : "une recette") + '</b></p>' +
+              '<span class="notif-status ' + row.status + '">' + label + '</span>' +
+            '</div>';
+          }).join("");
+        });
+    }
+  }
+
+  function respondToRequest(requestId, approve){
+    supabase.from("access_requests").select("recipe_id, requested_by").eq("id", requestId).single().then(function(res){
+      if (res.error || !res.data) return;
+      var proceed = function(){
+        supabase.from("access_requests").update({
+          status: approve ? "approved" : "declined",
+          responded_at: new Date().toISOString()
+        }).eq("id", requestId).then(function(res2){
+          if (res2.error){ toast("Une erreur est survenue."); return; }
+          toast(approve ? "Accès accordé !" : "Demande refusée.");
+          renderNotifBody();
+          loadPendingCount();
+        });
+      };
+      if (approve){
+        supabase.from("recipe_shares").upsert({
+          recipe_id: res.data.recipe_id,
+          shared_with_user_id: res.data.requested_by
+        }, { onConflict: "recipe_id,shared_with_user_id" }).then(proceed);
+      } else {
+        proceed();
+      }
+    });
+  }
+
+  if (els.notifBellBtn){
+    els.notifBellBtn.addEventListener("click", function(){
+      notifTab = "received";
+      els.notifOverlay.hidden = false;
+      renderNotifBody();
+    });
+  }
+  els.notifClose.addEventListener("click", function(){ els.notifOverlay.hidden = true; });
+  els.notifOverlay.addEventListener("click", function(e){ if (e.target === els.notifOverlay) els.notifOverlay.hidden = true; });
+  els.notifTabReceived.addEventListener("click", function(){ notifTab = "received"; renderNotifBody(); });
+  els.notifTabSent.addEventListener("click", function(){ notifTab = "sent"; renderNotifBody(); });
+
   /* ---------------- delete confirm ---------------- */
   function closeConfirm(){ els.confirmOverlay.hidden = true; state.deleteTargetId = null; }
   els.confirmClose.addEventListener("click", closeConfirm);
@@ -1356,8 +1535,10 @@
     if (state.familyId && state.familyName){
       els.familyBadgeBtn.textContent = "👪 " + state.familyName;
       els.familyBadgeBtn.hidden = false;
+      if (els.notifBellBtn) els.notifBellBtn.hidden = false;
     } else {
       els.familyBadgeBtn.hidden = true;
+      if (els.notifBellBtn) els.notifBellBtn.hidden = true;
     }
   }
 
@@ -1391,6 +1572,7 @@
     loadDiscoverRecipes();
     loadBlogPosts();
     loadFavorites();
+    loadPendingCount();
   }
 
   els.famSubmit.addEventListener("click", function(){
@@ -1569,7 +1751,7 @@
       card.innerHTML =
         '<div class="card-photo">' + photoHtml + '</div>' +
         '<div class="card-body">' +
-          '<p class="card-cat">' + esc(r.category || "Autre") + ' · 👪 ' + esc(famName) + famRegion + '</p>' +
+          '<p class="card-cat">' + esc(r.category || "Autre") + ' · <span class="fam-link" data-fam-link>👪 ' + esc(famName) + '</span>' + famRegion + '</p>' +
           '<h3 class="card-title">' + esc(r.title) + '</h3>' +
           tagsHtml +
           '<div class="card-meta">' +
@@ -1580,6 +1762,13 @@
       card.addEventListener("click", function(){ openDiscoverDetail(r.id); });
       card.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDiscoverDetail(r.id); } });
       card.style.setProperty("--cat-color", categoryColor(r.category));
+      var famLink = card.querySelector("[data-fam-link]");
+      if (famLink && r.family_id){
+        famLink.addEventListener("click", function(e){
+          e.stopPropagation();
+          openFamilyProfile(r.family_id, famName, r.families ? r.families.region : "");
+        });
+      }
       els.discoverGrid.appendChild(card);
     });
   }
@@ -1638,7 +1827,7 @@
         '<button class="sheet-close" data-close type="button">&times;</button>' +
       '</div>' +
       '<div class="detail-body">' +
-        '<p class="detail-cat">' + esc(r.category || "Autre") + ' · 👪 Recette de ' + esc(famName) + '</p>' +
+        '<p class="detail-cat">' + esc(r.category || "Autre") + ' · <span class="fam-link" data-fam-link>👪 Recette de ' + esc(famName) + '</span></p>' +
         '<h2 class="detail-title display">' + esc(r.title) + '</h2>' +
         (r.story ? '<p class="detail-story">' + esc(r.story) + '</p>' : '') +
         tagsHtml +
@@ -1661,6 +1850,13 @@
 
     els.detailSheet.querySelector("[data-close]").addEventListener("click", closeDetail);
     els.detailSheet.querySelector("[data-copy]").addEventListener("click", function(){ copyRecipeToMyFamily(r); });
+    var famLinkDetail = els.detailSheet.querySelector("[data-fam-link]");
+    if (famLinkDetail && r.family_id){
+      famLinkDetail.addEventListener("click", function(){
+        closeDetail();
+        openFamilyProfile(r.family_id, famName, r.families ? r.families.region : "");
+      });
+    }
     els.detailSheet.querySelector("[data-report]").addEventListener("click", function(){ openReportOverlay(r.id); });
     renderComments(r.id);
     wireCommentForm(r.id);
@@ -2064,6 +2260,12 @@
       .on("postgres_changes", { event: "*", schema: "public", table: "comments" }, function(payload){
         var rid = (payload.new && payload.new.recipe_id) || (payload.old && payload.old.recipe_id);
         if (state.openRecipeId && rid === state.openRecipeId) renderComments(state.openRecipeId);
+      })
+      .subscribe();
+    supabase.channel("access-requests-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "access_requests" }, function(){
+        loadPendingCount();
+        if (!els.notifOverlay.hidden) renderNotifBody();
       })
       .subscribe();
   }

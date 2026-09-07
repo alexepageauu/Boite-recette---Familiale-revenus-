@@ -28,6 +28,7 @@
       </svg>
       <div class="count-badge" id="countBadge"><b>0</b> recette</div>
       <button class="family-badge" id="familyBadgeBtn" type="button" hidden></button>
+      <button class="notif-bell" id="notifBellBtn" type="button" hidden>🔔<span class="notif-count" id="notifCount" hidden>0</span></button>
       <div class="auth-widget" id="authWidget">
         <button class="auth-link" id="authOpenBtn" type="button">Se connecter / créer un compte</button>
       </div>
@@ -307,6 +308,55 @@
       <button type="button" class="btn btn-primary" id="famCopyLinkBtn" style="width:100%;margin-top:12px;">🔗 Copier le lien d'invitation</button>
       <p class="hint" style="margin:8px 0 0;">Envoie ce lien par texto ou courriel — la personne n'aura qu'à créer son compte, elle rejoindra directement votre famille sans taper de code.</p>
     </div>
+  </div>
+</div>
+
+<!-- profil d'une famille (parcourir toutes ses recettes depuis Découvrir) -->
+<div class="overlay" id="familyProfileOverlay" hidden>
+  <div class="sheet" style="max-width:600px;">
+    <div class="sheet-head">
+      <h2 class="display" id="familyProfileHeading" style="margin:0;font-size:22px;">Famille</h2>
+      <button class="sheet-close" id="familyProfileClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="form-body">
+      <p class="hint" id="familyProfileRegion" style="margin:0 0 16px;"></p>
+      <div id="familyProfileList"><p class="hint">Chargement…</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- demander l'accès à une recette privée -->
+<div class="overlay" id="requestAccessOverlay" hidden>
+  <div class="sheet" style="max-width:420px;">
+    <div class="sheet-head">
+      <h2 class="display" style="margin:0;font-size:19px;">Demander l'accès</h2>
+      <button class="sheet-close" id="requestAccessClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="form-body">
+      <p class="hint" id="requestAccessRecipeName" style="margin:0;"></p>
+      <div class="field">
+        <textarea id="request-message" placeholder="Un petit mot pour expliquer pourquoi tu aimerais voir cette recette (facultatif)…"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="requestAccessCancel">Annuler</button>
+        <button type="button" class="btn btn-primary" id="requestAccessConfirm">Envoyer la demande</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- boîte de réception : demandes reçues et envoyées -->
+<div class="overlay" id="notifOverlay" hidden>
+  <div class="sheet" style="max-width:520px;">
+    <div class="sheet-head">
+      <h2 class="display" style="margin:0;font-size:20px;">Demandes d'accès</h2>
+      <button class="sheet-close" id="notifClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="notifTabReceived" type="button">Reçues</button>
+      <button class="auth-tab" id="notifTabSent" type="button">Envoyées</button>
+    </div>
+    <div class="form-body" id="notifBody"><p class="hint">Chargement…</p></div>
   </div>
 </div>
 
