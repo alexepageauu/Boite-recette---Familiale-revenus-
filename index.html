@@ -69,6 +69,7 @@
     <p>Publiez le tout premier article avec le bouton en bas à droite.</p>
   </div>
 
+  <div class="discover-filters" id="discoverFilters" hidden></div>
   <div class="grid" id="discoverGrid" hidden></div>
   <div class="empty-state" id="discoverEmptyState" hidden>
     <p class="display">Rien à découvrir pour l'instant</p>
@@ -251,6 +252,28 @@
       <div class="field" id="famCreateField">
         <label for="fam-name">Nom de ta famille</label>
         <input type="text" id="fam-name" maxlength="60" placeholder="Ex. Famille Pageau">
+        <label for="fam-region" style="margin-top:10px;">Région <span class="hint">(facultatif — pour apparaître dans Découvrir par région)</span></label>
+        <select id="fam-region">
+          <option value="">— Non précisé —</option>
+          <option>Bas-Saint-Laurent</option>
+          <option>Saguenay–Lac-Saint-Jean</option>
+          <option>Capitale-Nationale</option>
+          <option>Mauricie</option>
+          <option>Estrie</option>
+          <option>Montréal</option>
+          <option>Outaouais</option>
+          <option>Abitibi-Témiscamingue</option>
+          <option>Côte-Nord</option>
+          <option>Nord-du-Québec</option>
+          <option>Gaspésie–Îles-de-la-Madeleine</option>
+          <option>Chaudière-Appalaches</option>
+          <option>Laval</option>
+          <option>Lanaudière</option>
+          <option>Laurentides</option>
+          <option>Montérégie</option>
+          <option>Centre-du-Québec</option>
+          <option>Hors Québec</option>
+        </select>
       </div>
       <div class="field" id="famJoinField" hidden>
         <label for="fam-code">Code d'invitation</label>
@@ -273,6 +296,8 @@
     <div class="form-body">
       <p class="hint" style="margin:0;">Partage ce code avec les personnes que tu veux inviter dans ce carnet — elles n'ont qu'à choisir « Rejoindre avec un code » en créant leur compte.</p>
       <div class="invite-code-box" id="famInviteCodeBox"></div>
+      <button type="button" class="btn btn-primary" id="famCopyLinkBtn" style="width:100%;margin-top:12px;">🔗 Copier le lien d'invitation</button>
+      <p class="hint" style="margin:8px 0 0;">Envoie ce lien par texto ou courriel — la personne n'aura qu'à créer son compte, elle rejoindra directement votre famille sans taper de code.</p>
     </div>
   </div>
 </div>
@@ -385,6 +410,27 @@
       <div class="form-actions">
         <button type="button" class="btn" id="atpCancel">Annuler</button>
         <button type="button" class="btn btn-primary" id="atpConfirm">Ajouter à la semaine</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- signaler une recette publique -->
+<div class="overlay" id="reportOverlay" hidden>
+  <div class="sheet" style="max-width:420px;">
+    <div class="sheet-head">
+      <h2 class="display" style="margin:0;font-size:19px;">Signaler cette recette</h2>
+      <button class="sheet-close" id="reportClose" type="button" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="form-body">
+      <p class="hint" style="margin:0;">Dis-nous pourquoi cette recette te semble problématique (contenu copié sans droit, contenu inapproprié, etc.). On va vérifier rapidement.</p>
+      <div class="form-error" id="reportError" hidden></div>
+      <div class="field">
+        <textarea id="report-reason" required placeholder="Explique la raison du signalement…"></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="reportCancel">Annuler</button>
+        <button type="button" class="btn btn-danger" id="reportConfirm">Envoyer le signalement</button>
       </div>
     </div>
   </div>

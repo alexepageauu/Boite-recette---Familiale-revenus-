@@ -37,7 +37,8 @@
    "familyBadgeBtn","familyOnboardingOverlay","famTabCreate","famTabJoin","famError",
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
    "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility","memoryBanner","plannerView",
-   "addToPlannerOverlay","addToPlannerClose","atp-day","atp-slot","atp-servings","atpCancel","atpConfirm"
+   "addToPlannerOverlay","addToPlannerClose","atp-day","atp-slot","atp-servings","atpCancel","atpConfirm",
+   "reportOverlay","reportClose","report-reason","reportError","reportCancel","reportConfirm","famCopyLinkBtn","discoverFilters"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -65,7 +66,12 @@
     openRecipeId: null,
     plannerWeekOffset: 0,
     mealPlan: {},
-    groceryChecks: {}
+    groceryChecks: {},
+    manualGroceryItems: [],
+    discoverRegion: "",
+    discoverTag: "",
+    discoverSort: "recent",
+    discoverFamilyQuery: ""
   };
 
   var supabase = null;
@@ -202,8 +208,8 @@
 
   els.searchInput.addEventListener("input", function(e){
     state.searchTerm = e.target.value;
-    renderGrid();
-    renderFeatured();
+    if (state.view === "discover") renderDiscoverGrid();
+    else { renderGrid(); renderFeatured(); }
   });
 
   if (els.favToggleBtn){
@@ -377,6 +383,10 @@
     if (visBtn) visBtn.addEventListener("click", function(){
       if (!supabase) return;
       var newVisibility = isPublic ? "private" : "public";
+      if (newVisibility === "public" && r.source_url && /^https?:\/\//i.test(r.source_url)){
+        toast("Impossible : une recette avec un lien externe ne peut pas être rendue publique. Modifie sa provenance pour « Recette personnelle » d'abord.");
+        return;
+      }
       supabase.from("recipes").update({ visibility: newVisibility }).eq("id", r.id).then(function(res){
         if (res.error){ toast("Impossible de changer la visibilité — " + res.error.message); return; }
         toast(newVisibility === "public" ? "Recette rendue publique." : "Recette rendue privée.");
@@ -676,6 +686,42 @@
     toast("Ajouté au planificateur — vérifie l'onglet Planifier.");
   });
 
+  /* ---------------- signaler une recette publique ---------------- */
+  var pendingReportRecipeId = null;
+  function openReportOverlay(recipeId){
+    if (!state.session){ openAuth("login"); return; }
+    pendingReportRecipeId = recipeId;
+    els["report-reason"].value = "";
+    els.reportError.hidden = true;
+    els.reportOverlay.hidden = false;
+  }
+  function closeReportOverlay(){ els.reportOverlay.hidden = true; pendingReportRecipeId = null; }
+  els.reportClose.addEventListener("click", closeReportOverlay);
+  els.reportCancel.addEventListener("click", closeReportOverlay);
+  els.reportOverlay.addEventListener("click", function(e){ if (e.target === els.reportOverlay) closeReportOverlay(); });
+  els.reportConfirm.addEventListener("click", function(){
+    if (!supabase || !pendingReportRecipeId || !state.session) return;
+    var reason = els["report-reason"].value.trim();
+    if (!reason){
+      els.reportError.textContent = "Explique brièvement la raison du signalement.";
+      els.reportError.hidden = false;
+      return;
+    }
+    supabase.from("recipe_reports").insert({
+      recipe_id: pendingReportRecipeId,
+      reported_by: state.session.user.id,
+      reason: reason
+    }).then(function(res){
+      if (res.error){
+        els.reportError.textContent = "Le signalement n'a pas pu être envoyé — " + res.error.message;
+        els.reportError.hidden = false;
+        return;
+      }
+      closeReportOverlay();
+      toast("Signalement envoyé — merci, on va vérifier.");
+    });
+  });
+
   /* ---------------- delete confirm ---------------- */
   function closeConfirm(){ els.confirmOverlay.hidden = true; state.deleteTargetId = null; }
   els.confirmClose.addEventListener("click", closeConfirm);
@@ -805,6 +851,11 @@
     if (!title || !ingredients.length || !steps.length) return;
     if (!sourceVal){
       showFormError("Indique la provenance de la recette (un lien, ou une description comme « Recette personnelle »).");
+      return;
+    }
+    var looksExternal = /^https?:\/\//i.test(sourceVal);
+    if (els["f-visibility"].value === "public" && looksExternal){
+      showFormError("Une recette avec un lien externe comme provenance ne peut pas être rendue publique — seules les recettes personnelles ou familiales peuvent l'être, pour respecter le droit d'auteur. Garde-la privée, ou change la provenance pour « Recette personnelle ».");
       return;
     }
 
@@ -977,6 +1028,7 @@
     els.memoryBanner.hidden = recipeMode ? els.memoryBanner.hidden : true;
 
     els.discoverGrid.hidden = !discoverMode;
+    if (!discoverMode && els.discoverFilters) els.discoverFilters.hidden = true;
     els.discoverEmptyState.hidden = discoverMode ? !!state.discoverRecipes.length : true;
 
     els.blogList.hidden = !blogMode;
@@ -990,7 +1042,7 @@
       : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Ajouter une recette';
 
     if (recipeMode){ renderGrid(); renderFeatured(); }
-    else if (discoverMode){ renderDiscoverGrid(); loadDiscoverRecipes(); }
+    else if (discoverMode){ renderDiscoverFilters(); renderDiscoverGrid(); loadDiscoverRecipes(); }
     else if (plannerMode){ renderPlanner(); loadMealPlan(); }
     else { renderBlogList(); loadBlogPosts(); }
   }
@@ -1195,6 +1247,14 @@
     }
   });
 
+  function updateBlogTabVisibility(){
+    var blogBtn = els.viewSwitch.querySelector('[data-view="blog"]');
+    if (!blogBtn) return;
+    var shouldShow = state.isAdminFamily || state.blogPosts.length > 0;
+    blogBtn.style.display = shouldShow ? "" : "none";
+    if (!shouldShow && state.view === "blog") switchView("recipes");
+  }
+
   function loadBlogPosts(){
     if (!supabase) return;
     supabase.from("blog_posts").select("*").then(function(res){
@@ -1203,6 +1263,7 @@
         return String(b.created_at||"").localeCompare(String(a.created_at||""));
       });
       if (state.view === "blog") renderBlogList();
+      updateBlogTabVisibility();
     });
   }
 
@@ -1306,6 +1367,17 @@
   });
   els.famInfoClose.addEventListener("click", function(){ els.familyInfoOverlay.hidden = true; });
   els.familyInfoOverlay.addEventListener("click", function(e){ if (e.target === els.familyInfoOverlay) els.familyInfoOverlay.hidden = true; });
+  if (els.famCopyLinkBtn){
+    els.famCopyLinkBtn.addEventListener("click", function(){
+      if (!state.familyInviteCode) return;
+      var link = window.location.origin + window.location.pathname + "?join=" + state.familyInviteCode;
+      navigator.clipboard.writeText(link).then(function(){
+        toast("Lien copié — colle-le dans un texto ou un courriel !");
+      }, function(){
+        toast("Impossible de copier automatiquement — voici le lien : " + link);
+      });
+    });
+  }
 
   function enterFamily(id, name, code, isAdmin){
     state.familyId = id;
@@ -1328,7 +1400,7 @@
     if (state.famOnboardMode === "create"){
       var name = els["fam-name"].value.trim();
       if (!name){ els.famSubmit.disabled = false; return; }
-      supabase.rpc("create_family", { family_name: name }).then(function(res){
+      supabase.rpc("create_family", { family_name: name, family_region: document.getElementById("fam-region").value || null }).then(function(res){
         els.famSubmit.disabled = false;
         if (res.error || !res.data || !res.data.length){
           els.famError.textContent = "Impossible de créer la famille — " + (res.error ? res.error.message : "erreur inconnue");
@@ -1362,9 +1434,17 @@
       if (res.error) return;
       var rows = res.data || [];
       if (!rows.length){
-        setFamTab("create");
-        els["fam-name"].value = "";
-        els["fam-code"].value = "";
+        var params = new URLSearchParams(window.location.search);
+        var joinCode = params.get("join");
+        if (joinCode){
+          setFamTab("join");
+          els["fam-code"].value = joinCode.toUpperCase();
+          els["fam-name"].value = "";
+        } else {
+          setFamTab("create");
+          els["fam-name"].value = "";
+          els["fam-code"].value = "";
+        }
         els.familyOnboardingOverlay.hidden = false;
         return;
       }
@@ -1375,14 +1455,104 @@
 
   /* ================= DÉCOUVRIR (recettes publiques) ================= */
 
+  function filteredSortedDiscoverRecipes(){
+    var term = state.searchTerm.trim().toLowerCase();
+    var famTerm = state.discoverFamilyQuery.trim().toLowerCase();
+    var list = state.discoverRecipes.filter(function(r){
+      if (state.discoverRegion && (!r.families || r.families.region !== state.discoverRegion)) return false;
+      if (state.discoverTag && (!r.tags || r.tags.indexOf(state.discoverTag) === -1)) return false;
+      if (famTerm && !(r.families && r.families.name.toLowerCase().indexOf(famTerm) !== -1)) return false;
+      if (term){
+        var hay = (r.title + " " + (r.ingredients||[]).join(" ") + " " + (r.tags||[]).join(" ")).toLowerCase();
+        if (hay.indexOf(term) === -1) return false;
+      }
+      return true;
+    });
+    if (state.discoverSort === "family_az"){
+      list = list.slice().sort(function(a,b){
+        var an = a.families ? a.families.name : "";
+        var bn = b.families ? b.families.name : "";
+        return an.localeCompare(bn);
+      });
+    } else if (state.discoverSort === "title_az"){
+      list = list.slice().sort(function(a,b){ return a.title.localeCompare(b.title); });
+    }
+    // "recent" garde l'ordre déjà trié par date (sortByDate à la source)
+    return list;
+  }
+
+  function renderDiscoverFilters(){
+    if (!els.discoverFilters) return;
+    var regions = [];
+    state.discoverRecipes.forEach(function(r){
+      var reg = r.families && r.families.region;
+      if (reg && regions.indexOf(reg) === -1) regions.push(reg);
+    });
+    regions.sort();
+    var tags = [];
+    state.discoverRecipes.forEach(function(r){
+      (r.tags||[]).forEach(function(t){ if (tags.indexOf(t) === -1) tags.push(t); });
+    });
+    tags.sort();
+
+    if (!state.discoverRecipes.length){ els.discoverFilters.hidden = true; return; }
+    els.discoverFilters.hidden = false;
+
+    els.discoverFilters.innerHTML =
+      '<div class="discover-filters-row">' +
+        '<input type="text" id="discoverFamilySearch" placeholder="🔍 Chercher une famille…" value="' + esc(state.discoverFamilyQuery) + '">' +
+        '<select id="discoverRegionSelect">' +
+          '<option value="">Toutes les régions</option>' +
+          regions.map(function(r){ return '<option value="' + esc(r) + '"' + (state.discoverRegion === r ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join("") +
+        '</select>' +
+        '<select id="discoverSortSelect">' +
+          '<option value="recent"' + (state.discoverSort === "recent" ? ' selected' : '') + '>Plus récentes</option>' +
+          '<option value="title_az"' + (state.discoverSort === "title_az" ? ' selected' : '') + '>Titre A-Z</option>' +
+          '<option value="family_az"' + (state.discoverSort === "family_az" ? ' selected' : '') + '>Famille A-Z</option>' +
+        '</select>' +
+      '</div>' +
+      (tags.length
+        ? '<div class="discover-tag-row">' +
+            tags.map(function(t){
+              return '<button type="button" class="tag-filter-pill' + (state.discoverTag === t ? ' active' : '') + '" data-tag-filter="' + esc(t) + '">' + esc(t) + '</button>';
+            }).join("") +
+          '</div>'
+        : '');
+
+    document.getElementById("discoverFamilySearch").addEventListener("input", function(e){
+      state.discoverFamilyQuery = e.target.value;
+      renderDiscoverGrid();
+    });
+    document.getElementById("discoverRegionSelect").addEventListener("change", function(e){
+      state.discoverRegion = e.target.value;
+      renderDiscoverGrid();
+    });
+    document.getElementById("discoverSortSelect").addEventListener("change", function(e){
+      state.discoverSort = e.target.value;
+      renderDiscoverGrid();
+    });
+    els.discoverFilters.querySelectorAll("[data-tag-filter]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var t = btn.getAttribute("data-tag-filter");
+        state.discoverTag = (state.discoverTag === t) ? "" : t;
+        renderDiscoverFilters();
+        renderDiscoverGrid();
+      });
+    });
+  }
+
   function renderDiscoverGrid(){
     els.discoverGrid.innerHTML = "";
-    if (!state.discoverRecipes.length){
+    var list = filteredSortedDiscoverRecipes();
+    if (!list.length){
       els.discoverEmptyState.hidden = false;
+      els.discoverEmptyState.querySelector("p.display").textContent = state.discoverRecipes.length
+        ? "Aucun résultat avec ces filtres"
+        : "Rien à découvrir pour l'instant";
       return;
     }
     els.discoverEmptyState.hidden = true;
-    state.discoverRecipes.forEach(function(r){
+    list.forEach(function(r){
       var card = document.createElement("div");
       card.className = "card";
       card.tabIndex = 0;
@@ -1391,11 +1561,16 @@
         ? '<img src="' + esc(r.photo_url) + '" alt="" loading="lazy">'
         : '<span class="ph-fallback">' + esc(initialsWord(r.title)) + '</span>';
       var famName = r.families ? r.families.name : "Famille inconnue";
+      var famRegion = r.families && r.families.region ? " · 📍 " + esc(r.families.region) : "";
+      var tagsHtml = (r.tags && r.tags.length)
+        ? '<div class="tag-row">' + r.tags.slice(0,3).map(function(t){ return '<span class="tag-pill">' + esc(t) + '</span>'; }).join("") + '</div>'
+        : '';
       card.innerHTML =
         '<div class="card-photo">' + photoHtml + '</div>' +
         '<div class="card-body">' +
-          '<p class="card-cat">' + esc(r.category || "Autre") + ' · 👪 ' + esc(famName) + '</p>' +
+          '<p class="card-cat">' + esc(r.category || "Autre") + ' · 👪 ' + esc(famName) + famRegion + '</p>' +
           '<h3 class="card-title">' + esc(r.title) + '</h3>' +
+          tagsHtml +
           '<div class="card-meta">' +
             (r.prep_min || r.cook_min ? '<span>' + ICON_CLOCK + ' ' + ((num(r.prep_min)+num(r.cook_min)) || "–") + ' min</span>' : '') +
             (r.servings ? '<span>' + ICON_PLATE + ' ' + num(r.servings) + '</span>' : '') +
@@ -1476,12 +1651,16 @@
           '<div><p class="detail-h">Étapes</p><ol class="step-list">' + stepHtml + '</ol></div>' +
         '</div>' +
         sourceHtml +
-        '<div class="detail-actions"><button class="btn btn-primary" data-copy type="button">📋 Copier dans mon carnet</button></div>' +
+        '<div class="detail-actions">' +
+          '<button class="btn btn-primary" data-copy type="button">📋 Copier dans mon carnet</button>' +
+          '<button class="btn btn-danger" data-report type="button">🚩 Signaler</button>' +
+        '</div>' +
         commentsBlockHtml() +
       '</div>';
 
     els.detailSheet.querySelector("[data-close]").addEventListener("click", closeDetail);
     els.detailSheet.querySelector("[data-copy]").addEventListener("click", function(){ copyRecipeToMyFamily(r); });
+    els.detailSheet.querySelector("[data-report]").addEventListener("click", function(){ openReportOverlay(r.id); });
     renderComments(r.id);
     wireCommentForm(r.id);
     els.detailOverlay.hidden = false;
@@ -1607,8 +1786,33 @@
     supabase.from("grocery_checks").select("*").eq("family_id", state.familyId).then(function(res){
       if (res.error) return;
       state.groceryChecks = {};
-      (res.data || []).forEach(function(row){ state.groceryChecks[row.item_text] = row.checked; });
+      state.manualGroceryItems = [];
+      (res.data || []).forEach(function(row){
+        state.groceryChecks[row.item_text] = row.checked;
+        if (row.is_manual) state.manualGroceryItems.push(row.item_text);
+      });
       if (state.view === "planner") renderGroceryList();
+    });
+  }
+
+  function addManualGroceryItem(text){
+    text = text.trim();
+    if (!text || !supabase || !state.familyId) return;
+    var key = normalizeIngKey(text);
+    supabase.from("grocery_checks").upsert(
+      { family_id: state.familyId, item_text: key, checked: false, is_manual: true },
+      { onConflict: "family_id,item_text" }
+    ).then(function(res){
+      if (res.error){ toast("Impossible d'ajouter l'item."); return; }
+      loadGroceryChecks();
+    });
+  }
+
+  function removeManualGroceryItem(key){
+    if (!supabase || !state.familyId) return;
+    supabase.from("grocery_checks").delete().eq("family_id", state.familyId).eq("item_text", key).then(function(res){
+      if (res.error){ toast("Impossible de retirer l'item."); return; }
+      loadGroceryChecks();
     });
   }
 
@@ -1626,30 +1830,56 @@
   function renderGroceryList(){
     var listEl = els.plannerView.querySelector("#groceryList");
     if (!listEl) return;
-    var items = currentWeekIngredients();
-    if (!items.length){
-      listEl.innerHTML = '<p class="hint">Assigne des recettes à la semaine pour générer la liste automatiquement.</p>';
-      return;
-    }
-    listEl.innerHTML = items.map(function(it){
-      var checked = !!state.groceryChecks[it.key];
-      return '<label class="grocery-item' + (checked ? ' checked' : '') + '">' +
-        '<input type="checkbox" data-grocery-key="' + esc(it.key) + '"' + (checked ? ' checked' : '') + '>' +
-        '<span>' + esc(it.label) + '</span></label>';
-    }).join("");
+    var recipeItems = currentWeekIngredients();
+    var manualItems = state.manualGroceryItems.map(function(key){ return { key: key, label: key, manual: true }; });
+    var items = recipeItems.concat(manualItems);
+
+    var itemsHtml = items.length
+      ? items.map(function(it){
+          var checked = !!state.groceryChecks[it.key];
+          return '<label class="grocery-item' + (checked ? ' checked' : '') + '">' +
+            '<input type="checkbox" data-grocery-key="' + esc(it.key) + '"' + (checked ? ' checked' : '') + '>' +
+            '<span>' + esc(it.label) + '</span>' +
+            (it.manual ? '<button type="button" class="grocery-remove" data-grocery-remove="' + esc(it.key) + '" title="Retirer">&times;</button>' : '') +
+            '</label>';
+        }).join("")
+      : '<p class="hint">Assigne des recettes à la semaine pour générer la liste automatiquement.</p>';
+
+    listEl.innerHTML = itemsHtml +
+      '<div class="grocery-add-row">' +
+        '<input type="text" id="groceryAddInput" placeholder="Ajouter un item (ex. papier de toilette)…">' +
+        '<button type="button" class="btn" id="groceryAddBtn">+ Ajouter</button>' +
+      '</div>';
+
     listEl.querySelectorAll("[data-grocery-key]").forEach(function(cb){
       cb.addEventListener("change", function(){
         cb.closest(".grocery-item").classList.toggle("checked", cb.checked);
         toggleGroceryCheck(cb.getAttribute("data-grocery-key"), cb.checked);
       });
     });
+    listEl.querySelectorAll("[data-grocery-remove]").forEach(function(btn){
+      btn.addEventListener("click", function(e){
+        e.preventDefault();
+        removeManualGroceryItem(btn.getAttribute("data-grocery-remove"));
+      });
+    });
+    var addInput = listEl.querySelector("#groceryAddInput");
+    var addBtn = listEl.querySelector("#groceryAddBtn");
+    function submitManualItem(){
+      addManualGroceryItem(addInput.value);
+      addInput.value = "";
+    }
+    if (addBtn) addBtn.addEventListener("click", submitManualItem);
+    if (addInput) addInput.addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); submitManualItem(); } });
   }
 
   function exportGroceryList(){
-    var items = currentWeekIngredients();
+    var recipeItems = currentWeekIngredients();
+    var manualItems = state.manualGroceryItems.map(function(key){ return { key: key, label: key }; });
+    var items = recipeItems.concat(manualItems).filter(function(it){ return !state.groceryChecks[it.key]; });
     var days = currentWeekDates();
     var title = "Liste d'épicerie — " + days[0].getDate() + " " + MONTH_SHORT[days[0].getMonth()] + " au " + days[6].getDate() + " " + MONTH_SHORT[days[6].getMonth()];
-    if (!items.length){ toast("La liste est vide — assigne des recettes d'abord."); return; }
+    if (!items.length){ toast("Rien à imprimer — tout est déjà coché, ou la liste est vide."); return; }
     var html = "<!doctype html><html><head><meta charset='utf-8'><title>" + title + "</title>" +
       "<style>body{font-family:Georgia,'Times New Roman',serif;padding:40px;max-width:520px;margin:0 auto;color:#23302a;}" +
       "h1{font-size:21px;border-bottom:2px solid #23302a;padding-bottom:12px;}" +
@@ -1781,9 +2011,10 @@
 
   function loadDiscoverRecipes(){
     if (!supabase || !state.familyId) return;
-    supabase.from("recipes").select("*, families(name)").eq("visibility", "public").neq("family_id", state.familyId).then(function(res){
+    supabase.from("recipes").select("*, families(name, region)").eq("visibility", "public").neq("family_id", state.familyId).then(function(res){
       if (res.error){ toast("Impossible de charger Découvrir — " + res.error.message); return; }
       state.discoverRecipes = sortByDate(res.data || []);
+      if (state.view === "discover") renderDiscoverFilters();
       if (state.view === "discover") renderDiscoverGrid();
     });
   }
@@ -1820,7 +2051,15 @@
     supabase.auth.getSession().then(function(res){
       state.session = res.data && res.data.session ? res.data.session : null;
       renderAuthWidget();
-      if (state.session) checkFamilyMembership();
+      if (state.session){
+        checkFamilyMembership();
+      } else {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get("join")){
+          openAuth("signup");
+          toast("Crée ton compte pour rejoindre la famille qui t'a invité(e) !");
+        }
+      }
     });
     supabase.auth.onAuthStateChange(function(_event, session){
       state.session = session;
