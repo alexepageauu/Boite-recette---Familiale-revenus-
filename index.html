@@ -150,9 +150,12 @@
         <input type="file" id="f-photo" accept="image/*" hidden>
       </div>
 
-      <div class="field">
-        <label for="f-story">Petite histoire <span class="hint">(facultatif) — d'où vient cette recette?</span></label>
-        <textarea id="f-story" maxlength="600" placeholder="Ex. La recette de mémé, transmise depuis les années 60…"></textarea>
+      <div class="field" id="storyField">
+        <button type="button" class="story-toggle" id="storyToggleBtn">✏️ + Ajouter une petite histoire <span class="hint">(facultatif)</span></button>
+        <div id="storyFieldBody" hidden>
+          <label for="f-story">Petite histoire <span class="hint">— d'où vient cette recette?</span></label>
+          <textarea id="f-story" maxlength="600" placeholder="Ex. La recette de mémé, transmise depuis les années 60…"></textarea>
+        </div>
       </div>
 
       <div class="row2">
@@ -198,7 +201,10 @@
       </div>
 
       <div class="field">
-        <label for="f-source">Provenance de la recette</label>
+        <label for="f-source">Provenance de la recette
+          <button type="button" class="info-toggle" id="sourceInfoBtn" aria-label="Plus d'info">ⓘ</button>
+        </label>
+        <p class="hint" id="sourceInfoText" hidden>D'où vient cette recette? Par exemple : le lien du site web où tu l'as trouvée, « Livre de recettes de mémé », ou simplement « Recette personnelle » si tu l'as inventée. Ça aide à savoir qui remercier, et à respecter le droit d'auteur si jamais tu veux la rendre publique un jour.</p>
         <input type="text" id="f-source" required placeholder="Ex. https://... , ou « Livre de recettes de mémé », « Recette personnelle »">
       </div>
 

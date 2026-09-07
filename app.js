@@ -37,6 +37,7 @@
    "familyBadgeBtn","familyOnboardingOverlay","famTabCreate","famTabJoin","famError",
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
    "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility","memoryBanner","plannerView",
+   "storyToggleBtn","storyFieldBody","sourceInfoBtn","sourceInfoText",
    "addToPlannerOverlay","addToPlannerClose","atp-day","atp-slot","atp-servings","atpCancel","atpConfirm",
    "reportOverlay","reportClose","report-reason","reportError","reportCancel","reportConfirm","famCopyLinkBtn","discoverFilters",
    "notifBellBtn","notifCount","notifOverlay","notifClose","notifTabReceived","notifTabSent","notifBody",
@@ -1133,6 +1134,8 @@
     els.photoIcon.hidden = false;
     els.photoTxt.innerHTML = "<b>Choisir une photo</b><br>JPG ou PNG, redimensionnée automatiquement";
     els.formError.hidden = true;
+    if (els.storyFieldBody) els.storyFieldBody.hidden = true;
+    if (els.storyToggleBtn) els.storyToggleBtn.hidden = false;
     state.pendingPhotoBlob = null;
     state.pendingPhotoPreviewUrl = null;
     state.editingId = null;
@@ -1157,6 +1160,7 @@
       els["f-steps"].value = (existing.steps||[]).join("\n");
       els["f-author"].value = existing.author || "";
       els["f-story"].value = existing.story || "";
+      if (existing.story) { els.storyFieldBody.hidden = false; els.storyToggleBtn.hidden = true; }
       els["f-tags"].value = (existing.tags||[]).join(", ");
       els["f-source"].value = existing.source_url || "";
       els["f-visibility"].value = existing.visibility || "private";
@@ -1171,12 +1175,9 @@
       els.formSubmit.textContent = "Enregistrer la recette";
       els["f-visibility"].value = "private";
       if (!els["f-author"].value) els["f-author"].value = displayName(state.session);
-      // Modèle pré-rempli pour montrer le format attendu — la personne n'a qu'à remplacer le texte
-      els["f-servings"].value = 4;
+      // Seulement le temps de préparation et de cuisson sont pré-remplis, à ajuster au besoin
       els["f-prep"].value = 15;
       els["f-cook"].value = 25;
-      els["f-ingredients"].value = "500 g de farine\n2 oeufs\n250 ml de lait\n1 pincée de sel";
-      els["f-steps"].value = "Mélanger les ingrédients secs dans un grand bol.\nAjouter les oeufs et le lait, bien mélanger.\nCuire à 350°F pendant 25 minutes.";
     }
     els.formOverlay.hidden = false;
     els["f-title"].focus();
@@ -1186,6 +1187,8 @@
   els.formClose.addEventListener("click", closeForm);
   els.formCancel.addEventListener("click", closeForm);
   els.formOverlay.addEventListener("click", function(e){ if (e.target === els.formOverlay) closeForm(); });
+  if (els.storyToggleBtn) els.storyToggleBtn.addEventListener("click", function(){ els.storyFieldBody.hidden = false; els.storyToggleBtn.hidden = true; els["f-story"].focus(); });
+  if (els.sourceInfoBtn) els.sourceInfoBtn.addEventListener("click", function(){ els.sourceInfoText.hidden = !els.sourceInfoText.hidden; });
 
   els.photoDrop.addEventListener("click", function(){ els["f-photo"].click(); });
   els["f-photo"].addEventListener("change", function(e){
