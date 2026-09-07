@@ -75,6 +75,10 @@
     <p>Publiez le tout premier article avec le bouton en bas à droite.</p>
   </div>
 
+  <div class="family-search-block" id="familySearchBlock" hidden>
+    <input type="text" id="familyNameSearch" placeholder="🔍 Chercher n'importe quelle famille par son nom (même sans recette publique)…">
+    <div id="familySearchResults"></div>
+  </div>
   <div class="discover-filters" id="discoverFilters" hidden></div>
   <div class="grid" id="discoverGrid" hidden></div>
   <div class="empty-state" id="discoverEmptyState" hidden>
@@ -320,6 +324,7 @@
     </div>
     <div class="form-body">
       <p class="hint" id="familyProfileRegion" style="margin:0 0 16px;"></p>
+      <button type="button" class="btn btn-primary" id="familyGeneralRequestBtn" style="margin-bottom:16px;">📨 Envoyer une demande générale</button>
       <div id="familyProfileList"><p class="hint">Chargement…</p></div>
     </div>
   </div>

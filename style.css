@@ -136,6 +136,18 @@ img{ max-width:100%; }
 .notif-status.declined{ background:var(--danger); color:#fff; }
 .fam-link{ cursor:pointer; text-decoration:underline; text-decoration-style:dotted; }
 .fam-link:hover{ color:var(--pine); }
+.family-search-block{ margin-bottom:18px; }
+.family-search-block input{
+  width:100%; border:1px solid var(--line); border-radius:999px; padding:10px 16px;
+  font-size:14px; background:var(--surface); color:var(--ink); font-family:inherit;
+}
+#familySearchResults{ margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+.fam-result-row{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:10px 14px;
+}
+.fam-result-row .fam-result-name{ font-weight:600; font-size:14.5px; }
+.fam-result-row .fam-result-region{ font-size:12px; color:var(--ink-faint); }
 
 .family-onboard-tabs{ display:flex; gap:4px; }
 .invite-code-box{

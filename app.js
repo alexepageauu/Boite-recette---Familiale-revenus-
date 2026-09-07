@@ -41,7 +41,8 @@
    "reportOverlay","reportClose","report-reason","reportError","reportCancel","reportConfirm","famCopyLinkBtn","discoverFilters",
    "notifBellBtn","notifCount","notifOverlay","notifClose","notifTabReceived","notifTabSent","notifBody",
    "familyProfileOverlay","familyProfileHeading","familyProfileClose","familyProfileRegion","familyProfileList",
-   "requestAccessOverlay","requestAccessClose","requestAccessRecipeName","request-message","requestAccessCancel","requestAccessConfirm"
+   "requestAccessOverlay","requestAccessClose","requestAccessRecipeName","request-message","requestAccessCancel","requestAccessConfirm",
+   "familySearchBlock","familyNameSearch","familySearchResults","familyGeneralRequestBtn"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -728,7 +729,10 @@
 
   /* ================= PROFIL DE FAMILLE (parcourir) ================= */
 
+  var currentProfileFamily = null;
+
   function openFamilyProfile(familyId, familyName, familyRegion){
+    currentProfileFamily = { id: familyId, name: familyName, region: familyRegion };
     els.familyProfileHeading.textContent = "👪 " + familyName;
     els.familyProfileRegion.textContent = familyRegion ? "📍 " + familyRegion : "";
     els.familyProfileList.innerHTML = '<p class="hint">Chargement…</p>';
@@ -737,7 +741,7 @@
     supabase.from("recipes_browse").select("*").eq("family_id", familyId).then(function(res){
       if (res.error){ els.familyProfileList.innerHTML = '<p class="hint">Impossible de charger les recettes.</p>'; return; }
       var list = sortByDate(res.data || []);
-      if (!list.length){ els.familyProfileList.innerHTML = '<p class="hint">Aucune recette à afficher.</p>'; return; }
+      if (!list.length){ els.familyProfileList.innerHTML = '<p class="hint">Aucune recette publique ou visible pour l\'instant — tu peux quand même envoyer une demande générale ci-dessus.</p>'; return; }
       els.familyProfileList.innerHTML = list.map(function(r){
         var isPublic = r.visibility === "public";
         var mine = state.recipes.some(function(mr){ return mr.id === r.id; });
@@ -761,32 +765,74 @@
       });
       els.familyProfileList.querySelectorAll("[data-browse-request]").forEach(function(btn){
         btn.addEventListener("click", function(){
-          openRequestAccess(btn.getAttribute("data-browse-request"), btn.getAttribute("data-browse-title"));
+          openRequestAccess(btn.getAttribute("data-browse-request"), btn.getAttribute("data-browse-title"), familyId);
         });
       });
     });
   }
   els.familyProfileClose.addEventListener("click", function(){ els.familyProfileOverlay.hidden = true; });
   els.familyProfileOverlay.addEventListener("click", function(e){ if (e.target === els.familyProfileOverlay) els.familyProfileOverlay.hidden = true; });
+  if (els.familyGeneralRequestBtn){
+    els.familyGeneralRequestBtn.addEventListener("click", function(){
+      if (!currentProfileFamily) return;
+      openRequestAccess(null, "Demande générale à " + currentProfileFamily.name, currentProfileFamily.id);
+    });
+  }
+
+  /* ================= CHERCHER UNE FAMILLE PAR NOM ================= */
+
+  function renderFamilySearchResults(rows){
+    if (!rows.length){ els.familySearchResults.innerHTML = '<p class="hint">Aucune famille trouvée avec ce nom.</p>'; return; }
+    els.familySearchResults.innerHTML = rows.map(function(f){
+      return '<div class="fam-result-row">' +
+        '<div><span class="fam-result-name">👪 ' + esc(f.name) + '</span>' +
+        (f.region ? ' <span class="fam-result-region">📍 ' + esc(f.region) + '</span>' : '') + '</div>' +
+        '<button type="button" class="btn" data-fam-result="' + f.id + '" data-fam-result-name="' + esc(f.name) + '" data-fam-result-region="' + esc(f.region || "") + '">Voir le profil</button>' +
+      '</div>';
+    }).join("");
+    els.familySearchResults.querySelectorAll("[data-fam-result]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        openFamilyProfile(btn.getAttribute("data-fam-result"), btn.getAttribute("data-fam-result-name"), btn.getAttribute("data-fam-result-region"));
+      });
+    });
+  }
+
+  if (els.familyNameSearch){
+    var famSearchTimeout = null;
+    els.familyNameSearch.addEventListener("input", function(){
+      var q = els.familyNameSearch.value.trim();
+      clearTimeout(famSearchTimeout);
+      if (!q){ els.familySearchResults.innerHTML = ""; return; }
+      famSearchTimeout = setTimeout(function(){
+        supabase.rpc("search_families", { query: q }).then(function(res){
+          if (res.error){ els.familySearchResults.innerHTML = '<p class="hint">Recherche impossible.</p>'; return; }
+          renderFamilySearchResults((res.data || []).filter(function(f){ return f.id !== state.familyId; }));
+        });
+      }, 300);
+    });
+  }
 
   /* ================= DEMANDER L'ACCÈS ================= */
 
   var pendingRequestRecipeId = null;
-  function openRequestAccess(recipeId, recipeTitle){
+  var pendingRequestFamilyId = null;
+  function openRequestAccess(recipeId, label, targetFamilyId){
     if (!state.session){ openAuth("login"); return; }
     pendingRequestRecipeId = recipeId;
-    els.requestAccessRecipeName.textContent = "Recette : " + recipeTitle;
+    pendingRequestFamilyId = targetFamilyId;
+    els.requestAccessRecipeName.textContent = recipeId ? "Recette : " + label : label;
     els["request-message"].value = "";
     els.requestAccessOverlay.hidden = false;
   }
-  function closeRequestAccess(){ els.requestAccessOverlay.hidden = true; pendingRequestRecipeId = null; }
+  function closeRequestAccess(){ els.requestAccessOverlay.hidden = true; pendingRequestRecipeId = null; pendingRequestFamilyId = null; }
   els.requestAccessClose.addEventListener("click", closeRequestAccess);
   els.requestAccessCancel.addEventListener("click", closeRequestAccess);
   els.requestAccessOverlay.addEventListener("click", function(e){ if (e.target === els.requestAccessOverlay) closeRequestAccess(); });
   els.requestAccessConfirm.addEventListener("click", function(){
-    if (!supabase || !pendingRequestRecipeId || !state.session) return;
+    if (!supabase || !pendingRequestFamilyId || !state.session) return;
     supabase.from("access_requests").insert({
       recipe_id: pendingRequestRecipeId,
+      target_family_id: pendingRequestFamilyId,
       requested_by: state.session.user.id,
       requester_family_id: state.familyId,
       message: els["request-message"].value.trim() || null
@@ -803,9 +849,9 @@
   function loadPendingCount(){
     if (!supabase || !state.familyId) return;
     supabase.from("access_requests")
-      .select("id, recipes!inner(family_id)", { count: "exact", head: true })
+      .select("id", { count: "exact", head: true })
       .eq("status", "pending")
-      .eq("recipes.family_id", state.familyId)
+      .eq("target_family_id", state.familyId)
       .then(function(res){
         var n = res.count || 0;
         if (n > 0){ els.notifCount.hidden = false; els.notifCount.textContent = n; }
@@ -820,8 +866,8 @@
 
     if (notifTab === "received"){
       supabase.from("access_requests")
-        .select("*, recipes!inner(title, family_id), requester:requester_family_id(name)")
-        .eq("recipes.family_id", state.familyId)
+        .select("*, recipes(title), requester:requester_family_id(name)")
+        .eq("target_family_id", state.familyId)
         .order("created_at", { ascending: false })
         .then(function(res){
           if (res.error){ els.notifBody.innerHTML = '<p class="hint">Impossible de charger les demandes.</p>'; return; }
@@ -829,11 +875,12 @@
           if (!rows.length){ els.notifBody.innerHTML = '<p class="hint">Aucune demande reçue pour l\'instant.</p>'; return; }
           els.notifBody.innerHTML = rows.map(function(row){
             var famName = row.requester ? row.requester.name : "Une famille";
+            var what = row.recipes ? "à <b>" + esc(row.recipes.title) + "</b>" : "une demande générale";
             var actions = row.status === "pending"
               ? '<div class="notif-actions"><button class="btn btn-primary" data-approve="' + row.id + '" type="button">Approuver</button><button class="btn" data-decline="' + row.id + '" type="button">Refuser</button></div>'
               : '<span class="notif-status ' + row.status + '">' + (row.status === "approved" ? "Approuvée" : "Refusée") + '</span>';
             return '<div class="notif-item">' +
-              '<p><b>' + esc(famName) + '</b> a demandé l\'accès à <b>' + esc(row.recipes.title) + '</b></p>' +
+              '<p><b>' + esc(famName) + '</b> a demandé l\'accès ' + what + '</p>' +
               (row.message ? '<p class="hint">« ' + esc(row.message) + ' »</p>' : '') +
               actions +
             '</div>';
@@ -847,7 +894,7 @@
         });
     } else {
       supabase.from("access_requests")
-        .select("*, recipes(title)")
+        .select("*, recipes(title), target:target_family_id(name)")
         .eq("requested_by", state.session.user.id)
         .order("created_at", { ascending: false })
         .then(function(res){
@@ -856,8 +903,10 @@
           if (!rows.length){ els.notifBody.innerHTML = '<p class="hint">Tu n\'as envoyé aucune demande pour l\'instant.</p>'; return; }
           els.notifBody.innerHTML = rows.map(function(row){
             var label = row.status === "pending" ? "En attente" : (row.status === "approved" ? "Approuvée" : "Refusée");
+            var what = row.recipes ? esc(row.recipes.title) : "Demande générale";
+            var toFam = row.target ? " à " + esc(row.target.name) : "";
             return '<div class="notif-item">' +
-              '<p>Demande pour <b>' + esc(row.recipes ? row.recipes.title : "une recette") + '</b></p>' +
+              '<p>' + what + toFam + '</p>' +
               '<span class="notif-status ' + row.status + '">' + label + '</span>' +
             '</div>';
           }).join("");
@@ -879,7 +928,7 @@
           loadPendingCount();
         });
       };
-      if (approve){
+      if (approve && res.data.recipe_id){
         supabase.from("recipe_shares").upsert({
           recipe_id: res.data.recipe_id,
           shared_with_user_id: res.data.requested_by
@@ -1208,6 +1257,7 @@
     els.memoryBanner.hidden = recipeMode ? els.memoryBanner.hidden : true;
 
     els.discoverGrid.hidden = !discoverMode;
+    if (els.familySearchBlock) els.familySearchBlock.hidden = !discoverMode;
     if (!discoverMode && els.discoverFilters) els.discoverFilters.hidden = true;
     els.discoverEmptyState.hidden = discoverMode ? !!state.discoverRecipes.length : true;
 
