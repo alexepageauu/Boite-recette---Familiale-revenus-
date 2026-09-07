@@ -65,6 +65,7 @@
     famOnboardMode: "create",
     openRecipeId: null,
     plannerWeekOffset: 0,
+    plannerSubView: "horaire",
     mealPlan: {},
     groceryChecks: {},
     manualGroceryItems: [],
@@ -1901,6 +1902,28 @@
 
   function renderPlanner(){
     if (!els.plannerView) return;
+    var sub = state.plannerSubView || "horaire";
+    els.plannerView.innerHTML =
+      '<div class="planner-subtabs">' +
+        '<button type="button" class="planner-subtab' + (sub === "horaire" ? ' active' : '') + '" data-planner-sub="horaire">📅 Horaire de la semaine</button>' +
+        '<button type="button" class="planner-subtab' + (sub === "epicerie" ? ' active' : '') + '" data-planner-sub="epicerie">🛒 Liste d\'épicerie</button>' +
+      '</div>' +
+      '<div class="planner-content" id="plannerContent"></div>';
+
+    els.plannerView.querySelectorAll("[data-planner-sub]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        state.plannerSubView = btn.getAttribute("data-planner-sub");
+        renderPlanner();
+      });
+    });
+
+    if (sub === "epicerie") renderPlannerGrocery();
+    else renderPlannerSchedule();
+  }
+
+  function renderPlannerSchedule(){
+    var content = document.getElementById("plannerContent");
+    if (!content) return;
     var days = currentWeekDates();
     var datalistEl = document.getElementById("recipeDatalist");
     if (datalistEl) datalistEl.innerHTML = state.recipes.map(function(r){ return '<option value="' + esc(r.title) + '">'; }).join("");
@@ -1934,25 +1957,20 @@
       '</div>';
     }).join("");
 
-    els.plannerView.innerHTML =
+    content.innerHTML =
       '<div class="planner-week-nav">' +
         '<button class="btn" id="plannerPrevWeek" type="button">← Semaine précédente</button>' +
         '<span class="planner-week-label">' + days[0].getDate() + ' ' + MONTH_SHORT[days[0].getMonth()] + ' – ' + days[6].getDate() + ' ' + MONTH_SHORT[days[6].getMonth()] + '</span>' +
         '<button class="btn" id="plannerNextWeek" type="button">Semaine suivante →</button>' +
       '</div>' +
-      '<div class="planner-days">' + rowsHtml + '</div>' +
-      '<div class="grocery-section">' +
-        '<div class="grocery-header"><p class="detail-h" style="margin:0;">🛒 Liste d\'épicerie de la semaine</p>' +
-        '<button class="btn" id="groceryExportBtn" type="button">🖨️ Imprimer / PDF</button></div>' +
-        '<div class="grocery-list" id="groceryList"><p class="hint">Chargement…</p></div>' +
-      '</div>';
+      '<div class="planner-days">' + rowsHtml + '</div>';
 
     days.forEach(function(d){
       var iso = isoDate(d);
       MEAL_SLOTS.forEach(function(slotDef){
-        var searchInput = els.plannerView.querySelector('input.planner-search[data-plan-date="' + iso + '"][data-plan-slot="' + slotDef.key + '"]');
-        var servingsInput = els.plannerView.querySelector('input.planner-servings[data-servings-date="' + iso + '"][data-servings-slot="' + slotDef.key + '"]');
-        var leftoverBtn = els.plannerView.querySelector('.planner-leftovers-btn[data-plan-date="' + iso + '"][data-plan-slot="' + slotDef.key + '"]');
+        var searchInput = content.querySelector('input.planner-search[data-plan-date="' + iso + '"][data-plan-slot="' + slotDef.key + '"]');
+        var servingsInput = content.querySelector('input.planner-servings[data-servings-date="' + iso + '"][data-servings-slot="' + slotDef.key + '"]');
+        var leftoverBtn = content.querySelector('.planner-leftovers-btn[data-plan-date="' + iso + '"][data-plan-slot="' + slotDef.key + '"]');
         if (!searchInput) return;
 
         searchInput.addEventListener("input", function(){
@@ -1985,10 +2003,20 @@
       });
     });
 
-    els.plannerView.querySelector("#plannerPrevWeek").addEventListener("click", function(){ state.plannerWeekOffset--; loadMealPlan(); });
-    els.plannerView.querySelector("#plannerNextWeek").addEventListener("click", function(){ state.plannerWeekOffset++; loadMealPlan(); });
-    els.plannerView.querySelector("#groceryExportBtn").addEventListener("click", exportGroceryList);
+    content.querySelector("#plannerPrevWeek").addEventListener("click", function(){ state.plannerWeekOffset--; loadMealPlan(); });
+    content.querySelector("#plannerNextWeek").addEventListener("click", function(){ state.plannerWeekOffset++; loadMealPlan(); });
+  }
 
+  function renderPlannerGrocery(){
+    var content = document.getElementById("plannerContent");
+    if (!content) return;
+    content.innerHTML =
+      '<div class="grocery-section">' +
+        '<div class="grocery-header"><p class="detail-h" style="margin:0;">🛒 Liste d\'épicerie de la semaine</p>' +
+        '<button class="btn" id="groceryExportBtn" type="button">🖨️ Imprimer / PDF</button></div>' +
+        '<div class="grocery-list" id="groceryList"><p class="hint">Chargement…</p></div>' +
+      '</div>';
+    content.querySelector("#groceryExportBtn").addEventListener("click", exportGroceryList);
     renderGroceryList();
   }
 
