@@ -1171,6 +1171,12 @@
       els.formSubmit.textContent = "Enregistrer la recette";
       els["f-visibility"].value = "private";
       if (!els["f-author"].value) els["f-author"].value = displayName(state.session);
+      // Modèle pré-rempli pour montrer le format attendu — la personne n'a qu'à remplacer le texte
+      els["f-servings"].value = 4;
+      els["f-prep"].value = 15;
+      els["f-cook"].value = 25;
+      els["f-ingredients"].value = "500 g de farine\n2 oeufs\n250 ml de lait\n1 pincée de sel";
+      els["f-steps"].value = "Mélanger les ingrédients secs dans un grand bol.\nAjouter les oeufs et le lait, bien mélanger.\nCuire à 350°F pendant 25 minutes.";
     }
     els.formOverlay.hidden = false;
     els["f-title"].focus();
