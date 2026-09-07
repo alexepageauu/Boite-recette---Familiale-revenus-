@@ -96,6 +96,7 @@ img{ max-width:100%; }
 
 .header-side{ display:flex; flex-direction:column; align-items:flex-end; gap:10px; }
 .family-icon{ opacity:.8; }
+.header-stats-row{ display:flex; align-items:center; gap:8px; }
 .count-badge{
   font-family:"IBM Plex Mono", monospace; font-size:12.5px; color:#d9e2d2;
   border:1px solid rgba(242,239,226,.25); border-radius:999px; padding:6px 14px; white-space:nowrap;

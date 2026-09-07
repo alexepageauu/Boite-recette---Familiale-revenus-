@@ -46,8 +46,9 @@
    "familySearchBlock","familyNameSearch","familySearchResults","familyGeneralRequestBtn",
    "discoverLayout","discoverSidebarList","followedSection","familyFollowBtn",
    "authRequiredScreen","authRequiredBtn","controlsWrap","mainContent",
+   "scanBtn","scanPhotoInput",
    "famRegionEdit","famRegionSaveBtn","myFollowsLink",
-   "myFollowsOverlay","myFollowsClose","myFollowsList","myFollowsBellBtn","followCount",
+   "myFollowsOverlay","myFollowsClose","myFollowsList","myFollowsBellBtn",
    "familyProfileFollowers"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
@@ -796,14 +797,6 @@
     supabase.from("family_follows").select("followed_family_id").eq("follower_user_id", state.session.user.id).then(function(res){
       if (res.error) return;
       state.followedFamilyIds = (res.data || []).map(function(row){ return row.followed_family_id; });
-      if (els.followCount){
-        if (state.followedFamilyIds.length){
-          els.followCount.hidden = false;
-          els.followCount.textContent = state.followedFamilyIds.length;
-        } else {
-          els.followCount.hidden = true;
-        }
-      }
       if (state.view === "discover") loadFollowedRecipes();
     });
   }
@@ -865,7 +858,9 @@
       if (res.error){ els.myFollowsList.innerHTML = '<p class="hint">Impossible de charger.</p>'; return; }
       var rows = (res.data || []).filter(function(f){ return state.followedFamilyIds.indexOf(f.id) !== -1; });
       if (!rows.length){ els.myFollowsList.innerHTML = '<p class="hint">Tu ne suis encore aucune famille.</p>'; return; }
-      els.myFollowsList.innerHTML = rows.map(function(f){
+      els.myFollowsList.innerHTML =
+        '<p class="hint" style="margin:0 0 12px;">Tu suis ' + rows.length + ' famille' + (rows.length > 1 ? 's' : '') + '.</p>' +
+        rows.map(function(f){
         return '<div class="fam-result-row">' +
           '<div><span class="fam-result-name">👪 ' + esc(f.name) + '</span>' +
           (f.is_admin_family ? ' <span class="fam-verified-badge">✅ Officielle</span>' : '') +
@@ -1229,6 +1224,70 @@
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
+  }
+
+  /* ================= SCANNER UNE RECETTE PAR PHOTO (IA) ================= */
+
+  function blobToBase64(blob, cb){
+    var reader = new FileReader();
+    reader.onloadend = function(){
+      var base64 = String(reader.result).split(",")[1];
+      cb(base64);
+    };
+    reader.readAsDataURL(blob);
+  }
+
+  if (els.scanBtn){
+    els.scanBtn.addEventListener("click", function(){
+      if (!state.session){ openAuth("login"); return; }
+      els.scanPhotoInput.click();
+    });
+  }
+
+  if (els.scanPhotoInput){
+    els.scanPhotoInput.addEventListener("change", function(e){
+      var file = e.target.files && e.target.files[0];
+      els.scanPhotoInput.value = "";
+      if (!file) return;
+
+      toast("📷 Analyse de la photo en cours… ça peut prendre quelques secondes.");
+      compressImage(file, function(blob, previewUrl){
+        blobToBase64(blob, function(base64){
+          fetch("/api/scan-recipe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageBase64: base64, mediaType: "image/jpeg" })
+          }).then(function(res){ return res.json().then(function(data){ return { ok: res.ok, data: data }; }); })
+            .then(function(result){
+              if (!result.ok || result.data.error){
+                toast("Le scanner n'a pas fonctionné — " + (result.data && result.data.error ? result.data.error : "erreur inconnue") + ". Tu peux quand même remplir la recette à la main.");
+                return;
+              }
+              var extracted = result.data;
+              openForm(null);
+              els["f-title"].value = extracted.title || "";
+              if (extracted.servings) els["f-servings"].value = extracted.servings;
+              if (extracted.prep_min) els["f-prep"].value = extracted.prep_min;
+              if (extracted.cook_min) els["f-cook"].value = extracted.cook_min;
+              els["f-ingredients"].value = (extracted.ingredients || []).join("\n");
+              els["f-steps"].value = (extracted.steps || []).join("\n");
+              // Réutilise la photo scannée comme photo de la recette
+              state.pendingPhotoBlob = blob;
+              state.pendingPhotoPreviewUrl = previewUrl;
+              els.photoThumb.src = previewUrl;
+              els.photoThumb.hidden = false;
+              els.photoIcon.hidden = true;
+              els.photoTxt.innerHTML = "<b>Photo scannée</b><br>Cliquez pour la remplacer";
+              toast("✨ Recette extraite ! Vérifie et corrige au besoin avant d'enregistrer.");
+            })
+            .catch(function(){
+              toast("Le scanner n'a pas pu joindre le serveur. Réessaie dans un instant.");
+            });
+        });
+      }, function(){
+        toast("Impossible de lire cette image.");
+      });
+    });
   }
 
   function showFormError(msg){

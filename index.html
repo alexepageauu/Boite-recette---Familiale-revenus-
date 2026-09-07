@@ -26,10 +26,12 @@
         <circle cx="62" cy="14" r="5"/><path d="M52 34c0-6.5 4.5-11 10-11s10 4.5 10 11"/>
         <circle cx="78" cy="16" r="4.4"/><path d="M70 34c0-5.6 3.6-9.4 8-9.4s8 3.8 8 9.4"/>
       </svg>
-      <div class="count-badge" id="countBadge"><b>0</b> recette</div>
+      <div class="header-stats-row">
+        <div class="count-badge" id="countBadge"><b>0</b> recette</div>
+        <button class="notif-bell" id="notifBellBtn" type="button" hidden>🔔<span class="notif-count" id="notifCount" hidden>0</span></button>
+        <button class="notif-bell" id="myFollowsBellBtn" type="button" hidden title="Mes abonnements">⭐</button>
+      </div>
       <button class="family-badge" id="familyBadgeBtn" type="button" hidden></button>
-      <button class="notif-bell" id="notifBellBtn" type="button" hidden>🔔<span class="notif-count" id="notifCount" hidden>0</span></button>
-      <button class="notif-bell" id="myFollowsBellBtn" type="button" hidden title="Mes abonnements">⭐<span class="notif-count" id="followCount" hidden>0</span></button>
       <div class="auth-widget" id="authWidget">
         <button class="auth-link" id="authOpenBtn" type="button">Se connecter / créer un compte</button>
       </div>
@@ -63,6 +65,8 @@
     <div class="tabs" id="tabs"></div>
     <button class="fav-toggle" id="favToggleBtn" type="button" aria-pressed="false">♥ Mes favoris</button>
     <button class="import-btn" id="importBtn" type="button">📋 Importer une recette</button>
+    <button class="import-btn" id="scanBtn" type="button">📷 Scanner une photo (IA)</button>
+    <input type="file" id="scanPhotoInput" accept="image/*" capture="environment" hidden>
     <div class="search">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <input type="text" id="searchInput" placeholder="Chercher une recette ou un ingrédient…">
