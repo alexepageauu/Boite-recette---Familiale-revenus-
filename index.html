@@ -41,7 +41,17 @@
   </div>
 </div>
 
-<div class="controls-wrap">
+<div class="banner" id="modeBanner" hidden style="max-width:1080px;margin:16px auto 0;"></div>
+
+<div class="auth-required" id="authRequiredScreen">
+  <div class="auth-required-inner">
+    <p class="display auth-required-title">Connecte-toi pour voir tes recettes</p>
+    <p class="auth-required-text">Boîte à recettes familiale est un espace privé — crée un compte ou connecte-toi pour accéder à ton carnet, celui de ta famille, et découvrir celui des autres.</p>
+    <button type="button" class="btn btn-primary" id="authRequiredBtn">Se connecter / créer un compte</button>
+  </div>
+</div>
+
+<div class="controls-wrap" id="controlsWrap" hidden>
   <div class="view-switch" id="viewSwitch">
     <button class="view-btn active" data-view="recipes" type="button">🍽️ Mes recettes</button>
     <button class="view-btn" data-view="planner" type="button">📅 Planifier</button>
@@ -59,8 +69,7 @@
   </div>
 </div>
 
-<main>
-  <div class="banner" id="modeBanner" hidden></div>
+<main id="mainContent" hidden>
   <div class="memory-banner" id="memoryBanner" hidden></div>
   <div class="featured" id="featuredSection" hidden></div>
   <div class="grid" id="grid"></div>
@@ -104,7 +113,7 @@
   <a href="politique-de-confidentialite.html">Politique de confidentialité</a> · <a href="conditions-utilisation.html">Conditions d'utilisation</a>
 </div>
 
-<button class="fab" id="addBtn" type="button">
+<button class="fab" id="addBtn" type="button" hidden>
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
   Ajouter une recette
 </button>
@@ -195,7 +204,8 @@
       <div class="field">
         <label for="f-visibility">Visibilité</label>
         <select id="f-visibility">
-          <option value="private">🔒 Privée — visible seulement par ma famille</option>
+          <option value="personal">🙈 Personnelle — visible seulement par moi, même dans ma famille</option>
+          <option value="private">🔒 Privée — visible par toute ma famille</option>
           <option value="public">🌐 Publique — visible par toutes les familles dans Découvrir</option>
         </select>
       </div>

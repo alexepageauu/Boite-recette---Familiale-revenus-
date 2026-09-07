@@ -43,7 +43,8 @@
    "familyProfileOverlay","familyProfileHeading","familyProfileClose","familyProfileRegion","familyProfileList",
    "requestAccessOverlay","requestAccessClose","requestAccessRecipeName","request-message","requestAccessCancel","requestAccessConfirm",
    "familySearchBlock","familyNameSearch","familySearchResults","familyGeneralRequestBtn",
-   "discoverLayout","discoverSidebarList","followedSection","familyFollowBtn"
+   "discoverLayout","discoverSidebarList","followedSection","familyFollowBtn",
+   "authRequiredScreen","authRequiredBtn","controlsWrap","mainContent"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -194,7 +195,7 @@
           '<button type="button" class="card-fav" data-fav aria-label="Favori" aria-pressed="' + (!!state.favorites[r.id]) + '">' + heartIcon(!!state.favorites[r.id]) + '</button>' +
         '</div>' +
         '<div class="card-body">' +
-          '<p class="card-cat">' + esc(r.category || "Autre") + '</p>' +
+          '<p class="card-cat">' + esc(r.category || "Autre") + (r.visibility === "personal" ? ' · 🙈 Personnelle' : '') + '</p>' +
           '<h3 class="card-title">' + esc(r.title) + '</h3>' +
           tagsHtml +
           '<div class="card-meta">' +
@@ -315,17 +316,18 @@
       : '';
 
     var isPublic = r.visibility === "public";
+    var isPersonal = r.visibility === "personal";
     var actionsHtml = state.session
       ? '<div class="detail-actions">' +
           '<button class="btn" data-edit type="button">Modifier</button>' +
           '<button class="btn" data-add-planner type="button">📅 Ajouter au planificateur</button>' +
-          '<button class="btn" data-toggle-visibility type="button">' + (isPublic ? "🔒 Rendre privée" : "🌐 Rendre publique") + '</button>' +
+          (!isPersonal ? '<button class="btn" data-toggle-visibility type="button">' + (isPublic ? "🔒 Rendre privée" : "🌐 Rendre publique") + '</button>' : '') +
           '<button class="btn btn-danger" data-delete type="button">Supprimer</button>' +
         '</div>'
       : '<p class="signed-out-note">Connecte-toi pour modifier ou supprimer cette recette.</p>';
     var visibilityNote = isPublic
       ? '<p class="detail-visibility-note">🌐 Cette recette est visible par toutes les familles dans l\'onglet Découvrir.</p>'
-      : '';
+      : (isPersonal ? '<p class="detail-visibility-note">🙈 Cette recette est personnelle — seul(e) toi la vois, même les autres membres de ta famille ne la voient pas. Change ça dans « Modifier » si tu veux la partager.</p>' : '');
 
     var tagsHtml = (r.tags && r.tags.length)
       ? '<div class="detail-tags">' + r.tags.map(function(t){ return '<span class="tag-pill">' + esc(t) + '</span>'; }).join("") + '</div>'
@@ -1194,6 +1196,7 @@
       visibility: els["f-visibility"].value,
       family_id: state.familyId
     };
+    if (!state.editingId) data.created_by = state.session.user.id;
 
     els.formSubmit.disabled = true;
 
@@ -1603,7 +1606,17 @@
       var b2 = document.getElementById("authOpenBtn");
       if (b2) b2.addEventListener("click", function(){ openAuth("login"); });
     }
+    updateAuthGate();
   }
+
+  function updateAuthGate(){
+    var loggedIn = !!state.session;
+    if (els.authRequiredScreen) els.authRequiredScreen.hidden = loggedIn;
+    if (els.controlsWrap) els.controlsWrap.hidden = !loggedIn;
+    if (els.mainContent) els.mainContent.hidden = !loggedIn;
+    if (els.addBtn) els.addBtn.hidden = !loggedIn;
+  }
+  if (els.authRequiredBtn) els.authRequiredBtn.addEventListener("click", function(){ openAuth("login"); });
 
   function setAuthMode(mode){
     state.authMode = mode;
