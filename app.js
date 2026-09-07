@@ -42,7 +42,8 @@
    "notifBellBtn","notifCount","notifOverlay","notifClose","notifTabReceived","notifTabSent","notifBody",
    "familyProfileOverlay","familyProfileHeading","familyProfileClose","familyProfileRegion","familyProfileList",
    "requestAccessOverlay","requestAccessClose","requestAccessRecipeName","request-message","requestAccessCancel","requestAccessConfirm",
-   "familySearchBlock","familyNameSearch","familySearchResults","familyGeneralRequestBtn"
+   "familySearchBlock","familyNameSearch","familySearchResults","familyGeneralRequestBtn",
+   "discoverLayout","discoverSidebarList"
   ].forEach(function(id){ els[id] = document.getElementById(id); });
 
   var state = {
@@ -75,8 +76,7 @@
     manualGroceryItems: [],
     discoverRegion: "",
     discoverTag: "",
-    discoverSort: "recent",
-    discoverFamilyQuery: ""
+    discoverSort: "recent"
   };
 
   var supabase = null;
@@ -388,10 +388,6 @@
     if (visBtn) visBtn.addEventListener("click", function(){
       if (!supabase) return;
       var newVisibility = isPublic ? "private" : "public";
-      if (newVisibility === "public" && r.source_url && /^https?:\/\//i.test(r.source_url)){
-        toast("Impossible : une recette avec un lien externe ne peut pas être rendue publique. Modifie sa provenance pour « Recette personnelle » d'abord.");
-        return;
-      }
       supabase.from("recipes").update({ visibility: newVisibility }).eq("id", r.id).then(function(res){
         if (res.error){ toast("Impossible de changer la visibilité — " + res.error.message); return; }
         toast(newVisibility === "public" ? "Recette rendue publique." : "Recette rendue privée.");
@@ -812,6 +808,27 @@
     });
   }
 
+  function loadDiscoverSidebar(){
+    if (!supabase || !els.discoverSidebarList) return;
+    supabase.rpc("search_families", { query: "" }).then(function(res){
+      if (res.error){ els.discoverSidebarList.innerHTML = '<p class="hint">Impossible de charger.</p>'; return; }
+      var rows = (res.data || []).filter(function(f){ return f.id !== state.familyId; });
+      rows.sort(function(a,b){ return a.name.localeCompare(b.name); });
+      if (!rows.length){ els.discoverSidebarList.innerHTML = '<p class="hint">Aucune autre famille inscrite pour l\'instant.</p>'; return; }
+      els.discoverSidebarList.innerHTML = rows.map(function(f){
+        return '<button type="button" class="discover-sidebar-item" data-sidebar-fam="' + f.id + '" data-sidebar-fam-name="' + esc(f.name) + '" data-sidebar-fam-region="' + esc(f.region || "") + '">' +
+          '<span class="fam-result-name">👪 ' + esc(f.name) + '</span>' +
+          (f.region ? '<span class="fam-result-region">📍 ' + esc(f.region) + '</span>' : '') +
+        '</button>';
+      }).join("");
+      els.discoverSidebarList.querySelectorAll("[data-sidebar-fam]").forEach(function(btn){
+        btn.addEventListener("click", function(){
+          openFamilyProfile(btn.getAttribute("data-sidebar-fam"), btn.getAttribute("data-sidebar-fam-name"), btn.getAttribute("data-sidebar-fam-region"));
+        });
+      });
+    });
+  }
+
   /* ================= DEMANDER L'ACCÈS ================= */
 
   var pendingRequestRecipeId = null;
@@ -1082,11 +1099,6 @@
       showFormError("Indique la provenance de la recette (un lien, ou une description comme « Recette personnelle »).");
       return;
     }
-    var looksExternal = /^https?:\/\//i.test(sourceVal);
-    if (els["f-visibility"].value === "public" && looksExternal){
-      showFormError("Une recette avec un lien externe comme provenance ne peut pas être rendue publique — seules les recettes personnelles ou familiales peuvent l'être, pour respecter le droit d'auteur. Garde-la privée, ou change la provenance pour « Recette personnelle ».");
-      return;
-    }
 
     var data = {
       title: title,
@@ -1257,7 +1269,7 @@
     els.memoryBanner.hidden = recipeMode ? els.memoryBanner.hidden : true;
 
     els.discoverGrid.hidden = !discoverMode;
-    if (els.familySearchBlock) els.familySearchBlock.hidden = !discoverMode;
+    if (els.discoverLayout) els.discoverLayout.hidden = !discoverMode;
     if (!discoverMode && els.discoverFilters) els.discoverFilters.hidden = true;
     els.discoverEmptyState.hidden = discoverMode ? !!state.discoverRecipes.length : true;
 
@@ -1272,7 +1284,7 @@
       : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Ajouter une recette';
 
     if (recipeMode){ renderGrid(); renderFeatured(); }
-    else if (discoverMode){ renderDiscoverFilters(); renderDiscoverGrid(); loadDiscoverRecipes(); }
+    else if (discoverMode){ renderDiscoverFilters(); renderDiscoverGrid(); loadDiscoverRecipes(); loadDiscoverSidebar(); }
     else if (plannerMode){ renderPlanner(); loadMealPlan(); }
     else { renderBlogList(); loadBlogPosts(); }
   }
@@ -1690,11 +1702,9 @@
 
   function filteredSortedDiscoverRecipes(){
     var term = state.searchTerm.trim().toLowerCase();
-    var famTerm = state.discoverFamilyQuery.trim().toLowerCase();
     var list = state.discoverRecipes.filter(function(r){
       if (state.discoverRegion && (!r.families || r.families.region !== state.discoverRegion)) return false;
       if (state.discoverTag && (!r.tags || r.tags.indexOf(state.discoverTag) === -1)) return false;
-      if (famTerm && !(r.families && r.families.name.toLowerCase().indexOf(famTerm) !== -1)) return false;
       if (term){
         var hay = (r.title + " " + (r.ingredients||[]).join(" ") + " " + (r.tags||[]).join(" ")).toLowerCase();
         if (hay.indexOf(term) === -1) return false;
@@ -1733,7 +1743,6 @@
 
     els.discoverFilters.innerHTML =
       '<div class="discover-filters-row">' +
-        '<input type="text" id="discoverFamilySearch" placeholder="🔍 Chercher une famille…" value="' + esc(state.discoverFamilyQuery) + '">' +
         '<select id="discoverRegionSelect">' +
           '<option value="">Toutes les régions</option>' +
           regions.map(function(r){ return '<option value="' + esc(r) + '"' + (state.discoverRegion === r ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join("") +
@@ -1752,10 +1761,6 @@
           '</div>'
         : '');
 
-    document.getElementById("discoverFamilySearch").addEventListener("input", function(e){
-      state.discoverFamilyQuery = e.target.value;
-      renderDiscoverGrid();
-    });
     document.getElementById("discoverRegionSelect").addEventListener("change", function(e){
       state.discoverRegion = e.target.value;
       renderDiscoverGrid();
