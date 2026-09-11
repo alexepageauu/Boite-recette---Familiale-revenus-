@@ -38,6 +38,7 @@
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
    "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility","memoryBanner","plannerView",
    "storyToggleBtn","storyFieldBody","sourceInfoBtn","sourceInfoText",
+   "bookmarkField","f-is-bookmark","photoUploadField","bookmarkPhotoField","f-bookmark-photo",
    "addToPlannerOverlay","addToPlannerClose","atp-day","atp-slot","atp-servings","atpCancel","atpConfirm",
    "reportOverlay","reportClose","report-reason","reportError","reportCancel","reportConfirm","famCopyLinkBtn","discoverFilters",
    "notifBellBtn","notifCount","notifOverlay","notifClose","notifTabReceived","notifTabSent","notifBody",
@@ -201,7 +202,7 @@
           '<button type="button" class="card-fav" data-fav aria-label="Favori" aria-pressed="' + (!!state.favorites[r.id]) + '">' + heartIcon(!!state.favorites[r.id]) + '</button>' +
         '</div>' +
         '<div class="card-body">' +
-          '<p class="card-cat">' + esc(r.category || "Autre") + (r.visibility === "personal" ? ' · 🙈 Personnelle' : '') + '</p>' +
+          '<p class="card-cat">' + esc(r.category || "Autre") + (r.visibility === "personal" ? ' · 🙈 Personnelle' : '') + (r.is_bookmark ? ' · 🔗 Signet' : '') + '</p>' +
           '<h3 class="card-title">' + esc(r.title) + '</h3>' +
           tagsHtml +
           '<div class="card-meta">' +
@@ -209,9 +210,9 @@
             (r.servings ? '<span>' + ICON_PLATE + ' ' + num(r.servings) + '</span>' : '') +
           '</div>' +
         '</div>';
-      card.addEventListener("click", function(){ openDetail(r.id); });
+      card.addEventListener("click", function(){ openRecipeOrBookmark(r); });
       card.addEventListener("keydown", function(e){
-        if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDetail(r.id); }
+        if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openRecipeOrBookmark(r); }
       });
       card.style.setProperty("--cat-color", categoryColor(r.category));
       var favBtn = card.querySelector("[data-fav]");
@@ -255,7 +256,7 @@
         '<button class="btn btn-primary" data-featured-open type="button">Voir la recette</button>' +
       '</div>';
     els.featuredSection.hidden = false;
-    els.featuredSection.querySelector("[data-featured-open]").addEventListener("click", function(){ openDetail(r.id); });
+    els.featuredSection.querySelector("[data-featured-open]").addEventListener("click", function(){ openRecipeOrBookmark(r); });
     renderMemoryBanner();
   }
 
@@ -288,12 +289,20 @@
         '<button class="btn" data-memory-open type="button">Revoir la recette</button>' +
       '</div>';
     els.memoryBanner.hidden = false;
-    els.memoryBanner.querySelector("[data-memory-open]").addEventListener("click", function(){ openDetail(r.id); });
+    els.memoryBanner.querySelector("[data-memory-open]").addEventListener("click", function(){ openRecipeOrBookmark(r); });
   }
 
   /* ---------------- detail sheet ---------------- */
   function findRecipe(id){
     return state.recipes.filter(function(r){ return r.id === id; })[0];
+  }
+
+  function openRecipeOrBookmark(r){
+    if (r.is_bookmark && r.source_url){
+      window.open(r.source_url, "_blank", "noopener");
+      return;
+    }
+    openDetail(r.id);
   }
 
   function openDetail(id){
@@ -756,10 +765,10 @@
         var mine = state.recipes.some(function(mr){ return mr.id === r.id; });
         var unlocked = isPublic || mine;
         return '<div class="browse-recipe-row' + (unlocked ? '' : ' locked') + '">' +
-          '<span class="browse-title">' + (unlocked ? '' : (r.visibility === "personal" ? '🙈 ' : '🔒 ')) + esc(r.title) + '</span>' +
+          '<span class="browse-title">' + (unlocked ? '' : (r.visibility === "personal" ? '🙈 ' : '🔒 ')) + esc(r.title) + (r.is_bookmark ? ' 🔗' : '') + '</span>' +
           '<span class="browse-meta">' + esc(r.category || "") + '</span>' +
           (unlocked
-            ? '<button type="button" class="btn" data-browse-open="' + r.id + '" data-browse-public="' + isPublic + '">Voir</button>'
+            ? '<button type="button" class="btn" data-browse-open="' + r.id + '" data-browse-public="' + isPublic + '" data-browse-bookmark="' + (r.is_bookmark ? esc(r.source_url || "") : "") + '">Voir</button>'
             : '<button type="button" class="btn" data-browse-request="' + r.id + '" data-browse-title="' + esc(r.title) + '" data-browse-personal="' + (r.visibility === "personal") + '" data-browse-creator="' + (r.created_by || "") + '">Demander l\'accès</button>') +
         '</div>';
       }).join("");
@@ -767,6 +776,8 @@
       els.familyProfileList.querySelectorAll("[data-browse-open]").forEach(function(btn){
         btn.addEventListener("click", function(){
           var id = btn.getAttribute("data-browse-open");
+          var bookmarkUrl = btn.getAttribute("data-browse-bookmark");
+          if (bookmarkUrl){ window.open(bookmarkUrl, "_blank", "noopener"); return; }
           els.familyProfileOverlay.hidden = true;
           if (btn.getAttribute("data-browse-public") === "true") openDiscoverDetail(id);
           else openDetail(id);
@@ -1131,6 +1142,10 @@
     els.formError.hidden = true;
     if (els.storyFieldBody) els.storyFieldBody.hidden = true;
     if (els.storyToggleBtn) els.storyToggleBtn.hidden = false;
+    if (els.bookmarkField) els.bookmarkField.hidden = true;
+    if (els["f-is-bookmark"]) els["f-is-bookmark"].checked = false;
+    if (els["f-bookmark-photo"]) els["f-bookmark-photo"].value = "";
+    updatePhotoFieldMode();
     state.pendingPhotoBlob = null;
     state.pendingPhotoPreviewUrl = null;
     state.editingId = null;
@@ -1158,8 +1173,13 @@
       if (existing.story) { els.storyFieldBody.hidden = false; els.storyToggleBtn.hidden = true; }
       els["f-tags"].value = (existing.tags||[]).join(", ");
       els["f-source"].value = existing.source_url || "";
+      els.bookmarkField.hidden = !/^https?:\/\//i.test(existing.source_url || "");
+      els["f-is-bookmark"].checked = !!existing.is_bookmark;
       els["f-visibility"].value = existing.visibility || "private";
-      if (existing.photo_url){
+      updatePhotoFieldMode();
+      if (existing.is_bookmark){
+        els["f-bookmark-photo"].value = existing.photo_url || "";
+      } else if (existing.photo_url){
         els.photoThumb.src = existing.photo_url;
         els.photoThumb.hidden = false;
         els.photoIcon.hidden = true;
@@ -1184,6 +1204,21 @@
   els.formOverlay.addEventListener("click", function(e){ if (e.target === els.formOverlay) closeForm(); });
   if (els.storyToggleBtn) els.storyToggleBtn.addEventListener("click", function(){ els.storyFieldBody.hidden = false; els.storyToggleBtn.hidden = true; els["f-story"].focus(); });
   if (els.sourceInfoBtn) els.sourceInfoBtn.addEventListener("click", function(){ els.sourceInfoText.hidden = !els.sourceInfoText.hidden; });
+  function updatePhotoFieldMode(){
+    var isBookmark = !!(els["f-is-bookmark"] && els["f-is-bookmark"].checked);
+    if (els.photoUploadField) els.photoUploadField.hidden = isBookmark;
+    if (els.bookmarkPhotoField) els.bookmarkPhotoField.hidden = !isBookmark;
+  }
+
+  if (els["f-source"]){
+    els["f-source"].addEventListener("input", function(){
+      var looksLikeUrl = /^https?:\/\//i.test(els["f-source"].value.trim());
+      els.bookmarkField.hidden = !looksLikeUrl;
+      if (!looksLikeUrl) els["f-is-bookmark"].checked = false;
+      updatePhotoFieldMode();
+    });
+  }
+  if (els["f-is-bookmark"]) els["f-is-bookmark"].addEventListener("change", updatePhotoFieldMode);
 
   els.photoDrop.addEventListener("click", function(){ els["f-photo"].click(); });
   els["f-photo"].addEventListener("change", function(e){
@@ -1304,9 +1339,15 @@
     var ingredients = els["f-ingredients"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
     var steps = els["f-steps"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
     var sourceVal = els["f-source"].value.trim();
-    if (!title || !ingredients.length || !steps.length) return;
+    var isBookmark = !!(els["f-is-bookmark"] && els["f-is-bookmark"].checked);
+    if (!title) return;
+    if (!isBookmark && (!ingredients.length || !steps.length)) return;
     if (!sourceVal){
       showFormError("Indique la provenance de la recette (un lien, ou une description comme « Recette personnelle »).");
+      return;
+    }
+    if (isBookmark && !/^https?:\/\//i.test(sourceVal)){
+      showFormError("Un signet doit avoir un vrai lien web comme provenance.");
       return;
     }
 
@@ -1323,7 +1364,8 @@
       tags: els["f-tags"].value.split(",").map(function(s){ return s.trim(); }).filter(Boolean),
       source_url: sourceVal,
       visibility: els["f-visibility"].value,
-      family_id: state.familyId
+      family_id: state.familyId,
+      is_bookmark: isBookmark
     };
     if (!state.editingId) data.created_by = state.session.user.id;
 
@@ -1343,7 +1385,10 @@
       });
     }
 
-    if (state.pendingPhotoBlob){
+    if (isBookmark){
+      var bookmarkPhotoUrl = els["f-bookmark-photo"].value.trim();
+      finishSave(bookmarkPhotoUrl || null);
+    } else if (state.pendingPhotoBlob){
       var path = (state.session.user.id) + "/" + Date.now() + ".jpg";
       supabase.storage.from("recipe-photos").upload(path, state.pendingPhotoBlob, {
         contentType: "image/jpeg",
@@ -2057,7 +2102,7 @@
       card.innerHTML =
         '<div class="card-photo">' + photoHtml + '</div>' +
         '<div class="card-body">' +
-          '<p class="card-cat">' + esc(r.category || "Autre") + ' · <span class="fam-link" data-fam-link>👪 ' + esc(famName) + '</span>' + famRegion + '</p>' +
+          '<p class="card-cat">' + esc(r.category || "Autre") + (r.is_bookmark ? ' · 🔗 Signet' : '') + ' · <span class="fam-link" data-fam-link>👪 ' + esc(famName) + '</span>' + famRegion + '</p>' +
           '<h3 class="card-title">' + esc(r.title) + '</h3>' +
           tagsHtml +
           '<div class="card-meta">' +
@@ -2065,8 +2110,8 @@
             (r.servings ? '<span>' + ICON_PLATE + ' ' + num(r.servings) + '</span>' : '') +
           '</div>' +
         '</div>';
-      card.addEventListener("click", function(){ openDiscoverDetail(r.id); });
-      card.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDiscoverDetail(r.id); } });
+      card.addEventListener("click", function(){ openDiscoverRecipeOrBookmark(r); });
+      card.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDiscoverRecipeOrBookmark(r); } });
       card.style.setProperty("--cat-color", categoryColor(r.category));
       var famLink = card.querySelector("[data-fam-link]");
       if (famLink && r.family_id){
@@ -2109,6 +2154,14 @@
       switchView("recipes");
       toast("Recette copiée dans ton carnet !");
     });
+  }
+
+  function openDiscoverRecipeOrBookmark(r){
+    if (r.is_bookmark && r.source_url){
+      window.open(r.source_url, "_blank", "noopener");
+      return;
+    }
+    openDiscoverDetail(r.id);
   }
 
   function openDiscoverDetail(id){

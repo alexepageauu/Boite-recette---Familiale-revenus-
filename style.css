@@ -454,6 +454,8 @@ main{ max-width:1080px; margin:0 auto; padding:28px 24px 100px; }
   border-radius:50%; width:18px; height:18px; font-size:11px; line-height:1; cursor:pointer;
   display:inline-flex; align-items:center; justify-content:center; margin-left:4px; vertical-align:middle;
 }
+.checkbox-label{ display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; cursor:pointer; }
+.checkbox-label input{ width:16px; height:16px; accent-color:var(--pine); cursor:pointer; }
 .info-toggle:hover{ border-color:var(--accent); color:var(--accent-deep); }
 .story-toggle{
   appearance:none; border:1px dashed var(--line); background:transparent; color:var(--ink-soft);
