@@ -597,19 +597,15 @@ footer.site-footer{
 .discover-subtab.active::after{ content:""; position:absolute; left:0; right:0; bottom:-1px; height:3px; background:var(--accent); border-radius:3px 3px 0 0; }
 
 .discover-map-title{ margin:0 0 10px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--accent-deep); }
-#quebecMap{
-  display:grid; grid-template-columns:repeat(8, 1fr); grid-auto-rows:42px; gap:3px;
-  margin-bottom:22px; max-width:560px;
-}
-.qc-region{
-  appearance:none; border:1px solid var(--line); background:var(--surface); border-radius:5px;
-  cursor:pointer; transition:background .12s ease, border-color .12s ease, color .12s ease;
-  font-family:"IBM Plex Mono",monospace; font-size:9.5px; font-weight:600; color:var(--ink-soft);
-  padding:2px; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:normal;
-  display:flex; align-items:center; justify-content:center; text-align:center;
-}
-.qc-region:hover{ border-color:var(--accent); background:var(--surface-2); color:var(--ink); }
-.qc-region.active{ background:var(--pine); border-color:var(--pine); color:#f5f3e8; }
+#quebecMap{ max-width:340px; margin-bottom:8px; }
+.qc-svg{ width:100%; height:auto; display:block; }
+.qc-landmass{ fill:var(--surface-2); stroke:var(--pine); stroke-width:2; }
+.qc-marker circle{ fill:var(--accent); stroke:var(--pine-deep); stroke-width:2.5; cursor:pointer; transition:r .12s ease, fill .12s ease; }
+.qc-marker:hover circle, .qc-marker:focus circle{ fill:var(--pine); r:20; }
+.qc-marker.active circle{ fill:var(--pine); stroke:var(--accent); stroke-width:4; }
+.qc-marker{ outline:none; }
+.qc-label{ font-family:"IBM Plex Mono",monospace; font-size:15px; fill:var(--ink); paint-order:stroke; stroke:var(--surface); stroke-width:4; font-weight:600; pointer-events:none; }
+.qc-map-legend{ margin:6px 0 20px; font-size:11.5px; color:var(--ink-faint); font-style:italic; }
 .planner-subtab{
   appearance:none; border:none; background:transparent; color:var(--ink-soft);
   padding:10px 4px; margin-right:14px; font-size:14.5px; font-weight:600; cursor:pointer;
