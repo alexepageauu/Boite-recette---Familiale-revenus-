@@ -30,7 +30,7 @@
    "confirmOverlay","confirmClose","confirmDeleteBtn","confirmCancelBtn","toast",
    "authWidget","authOpenBtn","authOverlay","authClose","authHeading","authForm","authError",
    "authNameField","a-name","a-email","a-password","authSubmit","authHint","authTabLogin","authTabSignup",
-   "cookOverlay","cookSheet","viewSwitch","importBtn","importOverlay","importClose","importText","importSourceUrl","importCancel","importAnalyze",
+   "cookOverlay","cookSheet","viewSwitch","importBtn","importOverlay","importClose","importSourceUrl","importCancel","importAnalyze","importError",
    "blogList","blogEmptyState","blogFormOverlay","blogFormHeading","blogFormClose","blogForm","blogFormError",
    "bf-title","bf-photo","bfPhotoDrop","bfPhotoThumb","bfPhotoIcon","bfPhotoTxt","bf-body","bf-author","bf-source",
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
@@ -1478,31 +1478,32 @@
 
   els.importBtn.addEventListener("click", function(){
     if (!state.session){ openAuth("login"); return; }
-    els.importText.value = "";
     els.importSourceUrl.value = "";
+    els.importError.hidden = true;
     els.importOverlay.hidden = false;
-    els.importText.focus();
+    els.importSourceUrl.focus();
   });
   function closeImport(){ els.importOverlay.hidden = true; }
   els.importClose.addEventListener("click", closeImport);
   els.importCancel.addEventListener("click", closeImport);
+  els.importSourceUrl.addEventListener("keydown", function(e){ if (e.key === "Enter"){ e.preventDefault(); els.importAnalyze.click(); } });
   els.importOverlay.addEventListener("click", function(e){ if (e.target === els.importOverlay) closeImport(); });
   els.importAnalyze.addEventListener("click", function(){
-    var text = els.importText.value;
     var sourceUrl = els.importSourceUrl.value.trim();
-    if (!text.trim() && !sourceUrl){ closeImport(); return; }
-    var parsed = parseRecipeText(text);
+    els.importError.hidden = true;
+    if (!/^https?:\/\//i.test(sourceUrl)){
+      els.importError.textContent = "Colle un vrai lien web, qui commence par http:// ou https://.";
+      els.importError.hidden = false;
+      return;
+    }
     closeImport();
     openForm(null);
-    els["f-title"].value = parsed.title;
-    els["f-ingredients"].value = parsed.ingredients.join("\n");
-    els["f-steps"].value = parsed.steps.join("\n");
     els["f-source"].value = sourceUrl;
     updateBookmarkFieldVisibility();
-    if (parsed.servings) els["f-servings"].value = parsed.servings;
-    if (parsed.prep_min) els["f-prep"].value = parsed.prep_min;
-    if (parsed.cook_min) els["f-cook"].value = parsed.cook_min;
-    toast("Texte analysé — vérifie et complète avant d'enregistrer.");
+    els["f-is-bookmark"].checked = true;
+    updatePhotoFieldMode();
+    els["f-title"].focus();
+    toast("Lien importé — donne un titre à cette recette, puis enregistre.");
   });
 
   /* ================= BLOGUE NUTRITION ================= */

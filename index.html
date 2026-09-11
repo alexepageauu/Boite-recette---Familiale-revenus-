@@ -455,23 +455,21 @@
 
 <!-- importer une recette depuis un texte collé -->
 <div class="overlay" id="importOverlay" hidden>
-  <div class="sheet" style="max-width:560px;">
+  <div class="sheet" style="max-width:480px;">
     <div class="sheet-head">
       <h2 class="display" style="margin:0;font-size:20px;">Importer une recette</h2>
       <button class="sheet-close" id="importClose" type="button" aria-label="Fermer">&times;</button>
     </div>
     <div class="form-body">
-      <p class="hint" style="margin:0;">Colle ici le texte d'une recette copiée ailleurs (site web, courriel, document). On va essayer de remplir le titre, les ingrédients et les étapes automatiquement — tu pourras tout ajuster avant d'enregistrer.</p>
+      <p class="hint" style="margin:0;">Colle le lien d'une recette trouvée sur un site web. On va ouvrir une fiche prête à enregistrer comme signet — tu n'auras qu'à lui donner un titre.</p>
       <div class="field">
-        <textarea id="importText" style="min-height:220px;" placeholder="Colle le texte complet de la recette ici…"></textarea>
-      </div>
-      <div class="field">
-        <label for="importSourceUrl">Lien du site d'origine <span class="hint">(facultatif, mais recommandé)</span></label>
+        <label for="importSourceUrl">Lien de la recette</label>
         <input type="url" id="importSourceUrl" placeholder="https://...">
       </div>
+      <div class="form-error" id="importError" hidden></div>
       <div class="form-actions">
         <button type="button" class="btn" id="importCancel">Annuler</button>
-        <button type="button" class="btn btn-primary" id="importAnalyze">Analyser le texte</button>
+        <button type="button" class="btn btn-primary" id="importAnalyze">Importer</button>
       </div>
     </div>
   </div>
