@@ -989,7 +989,7 @@
     if (!supabase) return;
     supabase.from("recipes").select("*, families(name, region)")
       .eq("is_bookmark", true)
-      .neq("family_id", state.familyId)
+      .eq("visibility", "private")
       .order("created_at", { ascending: false })
       .then(function(res){
         if (res.error) return;
@@ -1132,30 +1132,30 @@
 
   /* ================= CARTE INTERACTIVE DU QUÉBEC ================= */
   var QUEBEC_MAP_REGIONS = [
-    { name: "Nord-du-Québec", col: "1 / 6", row: "1" },
-    { name: "Côte-Nord", col: "6 / 8", row: "1 / 3" },
-    { name: "Abitibi-Témiscamingue", col: "1 / 3", row: "2" },
-    { name: "Saguenay–Lac-Saint-Jean", col: "3 / 6", row: "2" },
-    { name: "Outaouais", col: "1 / 2", row: "3" },
-    { name: "Laurentides", col: "2 / 3", row: "3" },
-    { name: "Mauricie", col: "3 / 4", row: "3" },
-    { name: "Capitale-Nationale", col: "4 / 6", row: "3" },
-    { name: "Bas-Saint-Laurent", col: "6 / 7", row: "3" },
-    { name: "Lanaudière", col: "2 / 3", row: "4" },
-    { name: "Centre-du-Québec", col: "3 / 4", row: "4" },
-    { name: "Chaudière-Appalaches", col: "4 / 6", row: "4" },
-    { name: "Gaspésie–Îles-de-la-Madeleine", col: "6 / 7", row: "4" },
-    { name: "Laval", col: "2 / 3", row: "5" },
-    { name: "Montréal", col: "2 / 3", row: "6" },
-    { name: "Montérégie", col: "3 / 4", row: "5 / 7" },
-    { name: "Estrie", col: "4 / 5", row: "5 / 7" }
+    { name: "Nord-du-Québec", short: "Nord-du-Québec", col: "1 / 9", row: "1" },
+    { name: "Abitibi-Témiscamingue", short: "Abitibi", col: "1 / 3", row: "2" },
+    { name: "Saguenay–Lac-Saint-Jean", short: "Saguenay–Lac-St-Jean", col: "3 / 5", row: "2" },
+    { name: "Côte-Nord", short: "Côte-Nord", col: "5 / 9", row: "2" },
+    { name: "Outaouais", short: "Outaouais", col: "1 / 2", row: "3" },
+    { name: "Laurentides", short: "Laurentides", col: "2 / 3", row: "3" },
+    { name: "Mauricie", short: "Mauricie", col: "3 / 4", row: "3" },
+    { name: "Capitale-Nationale", short: "Capitale-Nat.", col: "4 / 5", row: "3" },
+    { name: "Bas-Saint-Laurent", short: "Bas-St-Laurent", col: "5 / 7", row: "3" },
+    { name: "Lanaudière", short: "Lanaudière", col: "2 / 3", row: "4" },
+    { name: "Centre-du-Québec", short: "Centre-du-Qc", col: "3 / 4", row: "4" },
+    { name: "Chaudière-Appalaches", short: "Chaudière-App.", col: "4 / 6", row: "4" },
+    { name: "Gaspésie–Îles-de-la-Madeleine", short: "Gaspésie", col: "7 / 9", row: "4" },
+    { name: "Laval", short: "Laval", col: "2 / 3", row: "5" },
+    { name: "Montérégie", short: "Montérégie", col: "3 / 5", row: "5 / 7" },
+    { name: "Estrie", short: "Estrie", col: "5 / 6", row: "5 / 7" },
+    { name: "Montréal", short: "Montréal", col: "2 / 3", row: "6" }
   ];
   function renderQuebecMap(){
     var mapEl = document.getElementById("quebecMap");
     if (!mapEl) return;
     mapEl.innerHTML = QUEBEC_MAP_REGIONS.map(function(r){
       var active = state.quebecMapRegion === r.name;
-      return '<button type="button" class="qc-region' + (active ? ' active' : '') + '" style="grid-column:' + r.col + ';grid-row:' + r.row + ';" data-qc-region="' + esc(r.name) + '" title="' + esc(r.name) + '"></button>';
+      return '<button type="button" class="qc-region' + (active ? ' active' : '') + '" style="grid-column:' + r.col + ';grid-row:' + r.row + ';" data-qc-region="' + esc(r.name) + '" title="' + esc(r.name) + '">' + esc(r.short) + '</button>';
     }).join("");
     mapEl.querySelectorAll("[data-qc-region]").forEach(function(btn){
       btn.addEventListener("click", function(){
