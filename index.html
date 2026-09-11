@@ -142,7 +142,7 @@
         <input type="text" id="f-title" required maxlength="80" placeholder="Ex. Tourtière de mémé">
       </div>
 
-      <div class="field" id="photoUploadField">
+      <div class="field">
         <label>Photo <span class="hint">(facultatif)</span></label>
         <div class="photo-drop" id="photoDrop">
           <img class="thumb" id="photoThumb" hidden>
@@ -152,12 +152,6 @@
           <span class="drop-txt" id="photoTxt"><b>Choisir une photo</b><br>JPG ou PNG, redimensionnée automatiquement</span>
         </div>
         <input type="file" id="f-photo" accept="image/*" hidden>
-      </div>
-
-      <div class="field" id="bookmarkPhotoField" hidden>
-        <label for="f-bookmark-photo">Lien direct vers l'image <span class="hint">(facultatif)</span></label>
-        <p class="hint" style="margin:0 0 6px;">Colle le lien direct de la photo sur le site d'origine (clic droit sur l'image → « Copier l'adresse de l'image »). On ne la copie jamais chez nous — elle reste hébergée sur leur site.</p>
-        <input type="text" id="f-bookmark-photo" placeholder="Ex. https://exemple.com/images/photo-plat.jpg">
       </div>
 
       <div class="field" id="storyField">
@@ -216,14 +210,6 @@
         </label>
         <p class="hint" id="sourceInfoText" hidden>D'où vient cette recette? Par exemple : le lien du site web où tu l'as trouvée, « Livre de recettes de mémé », ou simplement « Recette personnelle » si tu l'as inventée. Ça aide à savoir qui remercier, et à respecter le droit d'auteur si jamais tu veux la rendre publique un jour.</p>
         <input type="text" id="f-source" required placeholder="Ex. https://... , ou « Livre de recettes de mémé », « Recette personnelle »">
-      </div>
-
-      <div class="field" id="bookmarkField" hidden>
-        <label class="checkbox-label">
-          <input type="checkbox" id="f-is-bookmark">
-          🔗 Signet seulement — ne pas recopier la recette, juste garder le lien
-        </label>
-        <p class="hint" style="margin-top:4px;">Pratique pour respecter le droit d'auteur d'une recette trouvée sur un site web : pas besoin d'écrire les ingrédients ni les étapes. En cliquant sur cette recette, tu seras redirigé(e) directement vers le site d'origine.</p>
       </div>
 
       <div class="field">
@@ -470,6 +456,16 @@
       <div class="field">
         <label for="importSourceUrl">Lien de la recette</label>
         <input type="url" id="importSourceUrl" placeholder="https://...">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="importCat">Catégorie</label>
+          <select id="importCat"></select>
+        </div>
+        <div class="field">
+          <label for="importTags">Étiquettes <span class="hint">(facultatif)</span></label>
+          <input type="text" id="importTags" placeholder="Ex. rapide, santé, protéiné">
+        </div>
       </div>
       <div class="form-error" id="importError" hidden></div>
       <div class="form-actions">

@@ -30,7 +30,7 @@
    "confirmOverlay","confirmClose","confirmDeleteBtn","confirmCancelBtn","toast",
    "authWidget","authOpenBtn","authOverlay","authClose","authHeading","authForm","authError",
    "authNameField","a-name","a-email","a-password","authSubmit","authHint","authTabLogin","authTabSignup",
-   "cookOverlay","cookSheet","viewSwitch","importBtn","importOverlay","importClose","importSourceUrl","importCancel","importAnalyze","importError",
+   "cookOverlay","cookSheet","viewSwitch","importBtn","importOverlay","importClose","importSourceUrl","importCancel","importAnalyze","importError","importCat","importTags",
    "blogList","blogEmptyState","blogFormOverlay","blogFormHeading","blogFormClose","blogForm","blogFormError",
    "bf-title","bf-photo","bfPhotoDrop","bfPhotoThumb","bfPhotoIcon","bfPhotoTxt","bf-body","bf-author","bf-source",
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
@@ -38,7 +38,6 @@
    "famCreateField","famJoinField","fam-name","fam-code","famSubmit",
    "familyInfoOverlay","famInfoHeading","famInfoClose","famInviteCodeBox","discoverGrid","discoverEmptyState","f-visibility","memoryBanner","plannerView",
    "storyToggleBtn","storyFieldBody","sourceInfoBtn","sourceInfoText",
-   "bookmarkField","f-is-bookmark","photoUploadField","bookmarkPhotoField","f-bookmark-photo",
    "addToPlannerOverlay","addToPlannerClose","atp-day","atp-slot","atp-servings","atpCancel","atpConfirm",
    "reportOverlay","reportClose","report-reason","reportError","reportCancel","reportConfirm","famCopyLinkBtn","discoverFilters",
    "notifBellBtn","notifCount","notifOverlay","notifClose","notifTabReceived","notifTabSent","notifBody",
@@ -152,6 +151,13 @@
     o.value = c; o.textContent = c;
     els["f-cat"].appendChild(o);
   });
+  if (els.importCat){
+    CATEGORIES.forEach(function(c){
+      var o2 = document.createElement("option");
+      o2.value = c; o2.textContent = c;
+      els.importCat.appendChild(o2);
+    });
+  }
 
   /* ---------------- grid ---------------- */
   function visibleRecipes(){
@@ -1191,10 +1197,6 @@
     els.formError.hidden = true;
     if (els.storyFieldBody) els.storyFieldBody.hidden = true;
     if (els.storyToggleBtn) els.storyToggleBtn.hidden = false;
-    if (els.bookmarkField) els.bookmarkField.hidden = true;
-    if (els["f-is-bookmark"]) els["f-is-bookmark"].checked = false;
-    if (els["f-bookmark-photo"]) els["f-bookmark-photo"].value = "";
-    updatePhotoFieldMode();
     state.pendingPhotoBlob = null;
     state.pendingPhotoPreviewUrl = null;
     state.editingId = null;
@@ -1222,13 +1224,8 @@
       if (existing.story) { els.storyFieldBody.hidden = false; els.storyToggleBtn.hidden = true; }
       els["f-tags"].value = (existing.tags||[]).join(", ");
       els["f-source"].value = existing.source_url || "";
-      els.bookmarkField.hidden = !/^https?:\/\//i.test(existing.source_url || "");
-      els["f-is-bookmark"].checked = !!existing.is_bookmark;
       els["f-visibility"].value = existing.visibility || "private";
-      updatePhotoFieldMode();
-      if (existing.is_bookmark){
-        els["f-bookmark-photo"].value = existing.photo_url || "";
-      } else if (existing.photo_url){
+      if (existing.photo_url){
         els.photoThumb.src = existing.photo_url;
         els.photoThumb.hidden = false;
         els.photoIcon.hidden = true;
@@ -1253,22 +1250,6 @@
   els.formOverlay.addEventListener("click", function(e){ if (e.target === els.formOverlay) closeForm(); });
   if (els.storyToggleBtn) els.storyToggleBtn.addEventListener("click", function(){ els.storyFieldBody.hidden = false; els.storyToggleBtn.hidden = true; els["f-story"].focus(); });
   if (els.sourceInfoBtn) els.sourceInfoBtn.addEventListener("click", function(){ els.sourceInfoText.hidden = !els.sourceInfoText.hidden; });
-  function updatePhotoFieldMode(){
-    var isBookmark = !!(els["f-is-bookmark"] && els["f-is-bookmark"].checked);
-    if (els.photoUploadField) els.photoUploadField.hidden = isBookmark;
-    if (els.bookmarkPhotoField) els.bookmarkPhotoField.hidden = !isBookmark;
-  }
-
-  function updateBookmarkFieldVisibility(){
-    var looksLikeUrl = /^https?:\/\//i.test(els["f-source"].value.trim());
-    els.bookmarkField.hidden = !looksLikeUrl;
-    if (!looksLikeUrl) els["f-is-bookmark"].checked = false;
-    updatePhotoFieldMode();
-  }
-  if (els["f-source"]){
-    els["f-source"].addEventListener("input", updateBookmarkFieldVisibility);
-  }
-  if (els["f-is-bookmark"]) els["f-is-bookmark"].addEventListener("change", updatePhotoFieldMode);
 
   els.photoDrop.addEventListener("click", function(){ els["f-photo"].click(); });
   els["f-photo"].addEventListener("change", function(e){
@@ -1389,15 +1370,9 @@
     var ingredients = els["f-ingredients"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
     var steps = els["f-steps"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
     var sourceVal = els["f-source"].value.trim();
-    var isBookmark = !!(els["f-is-bookmark"] && els["f-is-bookmark"].checked);
-    if (!title) return;
-    if (!isBookmark && (!ingredients.length || !steps.length)) return;
+    if (!title || !ingredients.length || !steps.length) return;
     if (!sourceVal){
       showFormError("Indique la provenance de la recette (un lien, ou une description comme « Recette personnelle »).");
-      return;
-    }
-    if (isBookmark && !/^https?:\/\//i.test(sourceVal)){
-      showFormError("Un signet doit avoir un vrai lien web comme provenance.");
       return;
     }
 
@@ -1414,8 +1389,7 @@
       tags: els["f-tags"].value.split(",").map(function(s){ return s.trim(); }).filter(Boolean),
       source_url: sourceVal,
       visibility: els["f-visibility"].value,
-      family_id: state.familyId,
-      is_bookmark: isBookmark
+      family_id: state.familyId
     };
     if (!state.editingId) data.created_by = state.session.user.id;
 
@@ -1435,10 +1409,7 @@
       });
     }
 
-    if (isBookmark){
-      var bookmarkPhotoUrl = els["f-bookmark-photo"].value.trim();
-      finishSave(bookmarkPhotoUrl || null);
-    } else if (state.pendingPhotoBlob){
+    if (state.pendingPhotoBlob){
       var path = (state.session.user.id) + "/" + Date.now() + ".jpg";
       supabase.storage.from("recipe-photos").upload(path, state.pendingPhotoBlob, {
         contentType: "image/jpeg",
@@ -1529,6 +1500,8 @@
     if (!state.session){ openAuth("login"); return; }
     els.importSourceUrl.value = "";
     els.importError.hidden = true;
+    if (els.importCat) els.importCat.value = "Autre";
+    if (els.importTags) els.importTags.value = "";
     els.importOverlay.hidden = false;
     els.importSourceUrl.focus();
   });
@@ -1545,6 +1518,8 @@
       els.importError.hidden = false;
       return;
     }
+    var chosenCat = els.importCat ? els.importCat.value : "Autre";
+    var chosenTags = els.importTags ? els.importTags.value.split(",").map(function(s){ return s.trim(); }).filter(Boolean) : [];
     els.importAnalyze.disabled = true;
     els.importAnalyze.textContent = "Importation…";
 
@@ -1564,7 +1539,8 @@
         var photoUrl = (preview && preview.image) ? preview.image : null;
         supabase.from("recipes").insert({
           title: title,
-          category: "Autre",
+          category: chosenCat,
+          tags: chosenTags,
           ingredients: [],
           steps: [],
           source_url: sourceUrl,
