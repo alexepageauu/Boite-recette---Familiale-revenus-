@@ -1210,13 +1210,14 @@
     if (els.bookmarkPhotoField) els.bookmarkPhotoField.hidden = !isBookmark;
   }
 
+  function updateBookmarkFieldVisibility(){
+    var looksLikeUrl = /^https?:\/\//i.test(els["f-source"].value.trim());
+    els.bookmarkField.hidden = !looksLikeUrl;
+    if (!looksLikeUrl) els["f-is-bookmark"].checked = false;
+    updatePhotoFieldMode();
+  }
   if (els["f-source"]){
-    els["f-source"].addEventListener("input", function(){
-      var looksLikeUrl = /^https?:\/\//i.test(els["f-source"].value.trim());
-      els.bookmarkField.hidden = !looksLikeUrl;
-      if (!looksLikeUrl) els["f-is-bookmark"].checked = false;
-      updatePhotoFieldMode();
-    });
+    els["f-source"].addEventListener("input", updateBookmarkFieldVisibility);
   }
   if (els["f-is-bookmark"]) els["f-is-bookmark"].addEventListener("change", updatePhotoFieldMode);
 
@@ -1497,6 +1498,7 @@
     els["f-ingredients"].value = parsed.ingredients.join("\n");
     els["f-steps"].value = parsed.steps.join("\n");
     els["f-source"].value = sourceUrl;
+    updateBookmarkFieldVisibility();
     if (parsed.servings) els["f-servings"].value = parsed.servings;
     if (parsed.prep_min) els["f-prep"].value = parsed.prep_min;
     if (parsed.cook_min) els["f-cook"].value = parsed.cook_min;
