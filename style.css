@@ -457,7 +457,7 @@ main{ max-width:1080px; margin:0 auto; padding:28px 24px 100px; }
 .checkbox-label{ display:flex; align-items:center; gap:8px; font-size:14px; font-weight:600; cursor:pointer; }
 .checkbox-label input{ width:16px; height:16px; accent-color:var(--pine); cursor:pointer; }
 .card-context-menu{
-  position:fixed; z-index:200; background:var(--surface); border:1px solid var(--line); border-radius:8px;
+  position:fixed; z-index:5000; background:var(--surface); border:1px solid var(--line); border-radius:8px;
   box-shadow:0 6px 20px -4px rgba(0,0,0,.25); overflow:hidden; min-width:150px;
 }
 .card-context-menu button{

@@ -239,9 +239,11 @@
     var menu = document.getElementById("cardContextMenu");
     menu.hidden = false;
     var menuW = menu.offsetWidth || 150;
+    var menuH = menu.offsetHeight || 90;
     var maxX = window.innerWidth - menuW - 8;
-    menu.style.left = Math.min(x, maxX) + "px";
-    menu.style.top = y + "px";
+    var maxY = window.innerHeight - menuH - 8;
+    menu.style.left = Math.max(4, Math.min(x, maxX)) + "px";
+    menu.style.top = Math.max(4, Math.min(y, maxY)) + "px";
   }
   function closeCardContextMenu(){
     var menu = document.getElementById("cardContextMenu");
