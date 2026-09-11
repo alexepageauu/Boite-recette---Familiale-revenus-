@@ -200,6 +200,7 @@
       card.innerHTML =
         '<div class="card-photo">' + photoHtml +
           '<button type="button" class="card-fav" data-fav aria-label="Favori" aria-pressed="' + (!!state.favorites[r.id]) + '">' + heartIcon(!!state.favorites[r.id]) + '</button>' +
+          '<button type="button" class="card-menu-btn" data-card-menu aria-label="Options">⋮</button>' +
         '</div>' +
         '<div class="card-body">' +
           '<p class="card-cat">' + esc(r.category || "Autre") + (r.visibility === "personal" ? ' · 🙈 Personnelle' : '') + (r.is_bookmark ? ' · 🔗 Signet' : '') + '</p>' +
@@ -214,10 +215,56 @@
       card.addEventListener("keydown", function(e){
         if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openRecipeOrBookmark(r); }
       });
+      card.addEventListener("contextmenu", function(e){
+        e.preventDefault();
+        openCardContextMenu(r, e.clientX, e.clientY);
+      });
       card.style.setProperty("--cat-color", categoryColor(r.category));
       var favBtn = card.querySelector("[data-fav]");
       favBtn.addEventListener("click", function(e){ e.stopPropagation(); toggleFavorite(r.id); });
+      var menuBtn = card.querySelector("[data-card-menu]");
+      menuBtn.addEventListener("click", function(e){
+        e.stopPropagation();
+        var rect = menuBtn.getBoundingClientRect();
+        openCardContextMenu(r, rect.left, rect.bottom + 4);
+      });
       els.grid.appendChild(card);
+    });
+  }
+
+  /* ---------------- menu contextuel (modifier / supprimer) ---------------- */
+  var cardContextMenuTarget = null;
+  function openCardContextMenu(r, x, y){
+    cardContextMenuTarget = r;
+    var menu = document.getElementById("cardContextMenu");
+    menu.hidden = false;
+    var menuW = menu.offsetWidth || 150;
+    var maxX = window.innerWidth - menuW - 8;
+    menu.style.left = Math.min(x, maxX) + "px";
+    menu.style.top = y + "px";
+  }
+  function closeCardContextMenu(){
+    var menu = document.getElementById("cardContextMenu");
+    if (menu) menu.hidden = true;
+    cardContextMenuTarget = null;
+  }
+  document.addEventListener("click", function(e){
+    var menu = document.getElementById("cardContextMenu");
+    if (menu && !menu.hidden && !menu.contains(e.target)) closeCardContextMenu();
+  });
+  document.addEventListener("scroll", closeCardContextMenu, true);
+  var cardCtxMenuEl = document.getElementById("cardContextMenu");
+  if (cardCtxMenuEl){
+    cardCtxMenuEl.querySelector("[data-menu-edit]").addEventListener("click", function(){
+      if (cardContextMenuTarget) openForm(cardContextMenuTarget);
+      closeCardContextMenu();
+    });
+    cardCtxMenuEl.querySelector("[data-menu-delete]").addEventListener("click", function(){
+      if (cardContextMenuTarget){
+        state.deleteTargetId = cardContextMenuTarget.id;
+        els.confirmOverlay.hidden = false;
+      }
+      closeCardContextMenu();
     });
   }
 
