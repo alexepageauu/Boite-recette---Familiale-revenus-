@@ -15,7 +15,7 @@
 <div class="topbar">
   <div class="topbar-inner">
     <div>
-      <p class="brand-eyebrow">Carnet de famille</p>
+      <p class="brand-eyebrow">Carnet de famille québécoise</p>
       <h1 class="brand-title">Boîte à recettes familiale</h1>
       <p class="brand-sub">Les recettes qu'on se garde précieusement.</p>
     </div>
@@ -89,13 +89,35 @@
     <p>Publiez le tout premier article avec le bouton en bas à droite.</p>
   </div>
 
-  <div class="discover-layout" id="discoverLayout" hidden>
-    <div class="discover-main">
-      <div class="followed-section" id="followedSection" hidden></div>
-      <div class="family-search-block" id="familySearchBlock">
-        <input type="text" id="familyNameSearch" placeholder="🔍 Chercher n'importe quelle famille par son nom (même sans recette publique)…">
-        <div id="familySearchResults"></div>
+  <div class="discover-wrap" id="discoverWrap" hidden>
+    <div class="discover-subtabs">
+      <button type="button" class="discover-subtab active" data-discover-sub="quebec">🍁 Recettes québécoises</button>
+      <button type="button" class="discover-subtab" data-discover-sub="tous">🌐 Tous</button>
+    </div>
+
+    <div class="discover-layout" id="discoverQuebecView">
+      <div class="discover-main">
+        <p class="discover-map-title">📍 Trouve des familles par région</p>
+        <div id="quebecMap"></div>
+        <div class="followed-section" id="followedSection" hidden></div>
+        <div class="family-search-block" id="familySearchBlock">
+          <input type="text" id="familyNameSearch" placeholder="🔍 Chercher n'importe quelle famille par son nom…">
+          <div id="familySearchResults"></div>
+        </div>
+        <p class="discover-map-title" id="quebecGridTitle">🍁 Recettes partagées par les familles</p>
+        <div class="grid" id="quebecGrid" hidden></div>
+        <div class="empty-state" id="quebecEmptyState" hidden>
+          <p class="display">Rien à voir ici pour l'instant</p>
+          <p>Quand une famille importe une recette et la partage, elle apparaît ici pour tout le Québec.</p>
+        </div>
       </div>
+      <aside class="discover-sidebar">
+        <p class="discover-sidebar-title">👪 Toutes les familles</p>
+        <div id="discoverSidebarList"><p class="hint">Chargement…</p></div>
+      </aside>
+    </div>
+
+    <div id="discoverTousView" hidden>
       <div class="discover-filters" id="discoverFilters" hidden></div>
       <div class="grid" id="discoverGrid" hidden></div>
       <div class="empty-state" id="discoverEmptyState" hidden>
@@ -103,10 +125,6 @@
         <p>Quand une famille rend une recette publique, elle apparaît ici pour tout le monde.</p>
       </div>
     </div>
-    <aside class="discover-sidebar">
-      <p class="discover-sidebar-title">👪 Toutes les familles</p>
-      <div id="discoverSidebarList"><p class="hint">Chargement…</p></div>
-    </aside>
   </div>
 
   <div class="planner-view" id="plannerView" hidden></div>
@@ -466,6 +484,13 @@
           <label for="importTags">Étiquettes <span class="hint">(facultatif)</span></label>
           <input type="text" id="importTags" placeholder="Ex. rapide, santé, protéiné">
         </div>
+      </div>
+      <div class="field">
+        <label for="importVisibility">Visibilité</label>
+        <select id="importVisibility">
+          <option value="private">👪 Partagé avec ma famille — visible aussi dans Découvrir Québec</option>
+          <option value="personal">🙈 Personnel — juste pour moi</option>
+        </select>
       </div>
       <div class="form-error" id="importError" hidden></div>
       <div class="form-actions">

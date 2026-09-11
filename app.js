@@ -30,7 +30,7 @@
    "confirmOverlay","confirmClose","confirmDeleteBtn","confirmCancelBtn","toast",
    "authWidget","authOpenBtn","authOverlay","authClose","authHeading","authForm","authError",
    "authNameField","a-name","a-email","a-password","authSubmit","authHint","authTabLogin","authTabSignup",
-   "cookOverlay","cookSheet","viewSwitch","importBtn","importOverlay","importClose","importSourceUrl","importCancel","importAnalyze","importError","importCat","importTags",
+   "cookOverlay","cookSheet","viewSwitch","importBtn","importOverlay","importClose","importSourceUrl","importCancel","importAnalyze","importError","importCat","importTags","importVisibility",
    "blogList","blogEmptyState","blogFormOverlay","blogFormHeading","blogFormClose","blogForm","blogFormError",
    "bf-title","bf-photo","bfPhotoDrop","bfPhotoThumb","bfPhotoIcon","bfPhotoTxt","bf-body","bf-author","bf-source",
    "blogFormCancel","blogFormSubmit","blogDetailOverlay","blogDetailSheet","f-source",
@@ -45,6 +45,7 @@
    "requestAccessOverlay","requestAccessClose","requestAccessRecipeName","request-message","requestAccessCancel","requestAccessConfirm",
    "familySearchBlock","familyNameSearch","familySearchResults","familyGeneralRequestBtn",
    "discoverLayout","discoverSidebarList","followedSection","familyFollowBtn",
+   "discoverWrap","discoverQuebecView","discoverTousView","quebecGrid","quebecEmptyState",
    "authRequiredScreen","authRequiredBtn","controlsWrap","mainContent",
    "scanBtn","scanPhotoInput",
    "famRegionEdit","famRegionSaveBtn","myFollowsLink",
@@ -84,8 +85,11 @@
     discoverRegion: "",
     discoverTag: "",
     discoverSort: "recent",
+    discoverCategory: "",
     followedFamilyIds: [],
-    followedRecipesCache: []
+    followedRecipesCache: [],
+    quebecMapRegion: "",
+    discoverSubView: "quebec"
   };
 
   var supabase = null;
@@ -978,7 +982,89 @@
       });
   }
 
-  /* ================= CHERCHER UNE FAMILLE PAR NOM ================= */
+  /* ================= ONGLET "RECETTES QUÉBÉCOISES" — signets partagés par toutes les familles ================= */
+
+  var quebecBookmarksCache = [];
+  function loadQuebecBookmarks(){
+    if (!supabase) return;
+    supabase.from("recipes").select("*, families(name, region)")
+      .eq("is_bookmark", true)
+      .neq("family_id", state.familyId)
+      .order("created_at", { ascending: false })
+      .then(function(res){
+        if (res.error) return;
+        quebecBookmarksCache = res.data || [];
+        renderQuebecGrid();
+      });
+  }
+  function renderQuebecGrid(){
+    if (!els.quebecGrid) return;
+    var list = quebecBookmarksCache.slice();
+    if (state.quebecMapRegion) list = list.filter(function(r){ return r.families && r.families.region === state.quebecMapRegion; });
+    els.quebecGrid.innerHTML = "";
+    if (!list.length){
+      els.quebecGrid.hidden = true;
+      els.quebecEmptyState.hidden = false;
+      return;
+    }
+    els.quebecEmptyState.hidden = true;
+    els.quebecGrid.hidden = false;
+    list.forEach(function(r){
+      var card = document.createElement("div");
+      card.className = "card";
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+      var photoHtml = r.photo_url
+        ? '<img src="' + esc(r.photo_url) + '" alt="" loading="lazy">'
+        : '<span class="ph-fallback">' + esc(initialsWord(r.title)) + '</span>';
+      var famName = r.families ? r.families.name : "Famille inconnue";
+      var famRegion = r.families && r.families.region ? " · 📍 " + esc(r.families.region) : "";
+      var tagsHtml = (r.tags && r.tags.length)
+        ? '<div class="tag-row">' + r.tags.slice(0,3).map(function(t){ return '<span class="tag-pill">' + esc(t) + '</span>'; }).join("") + '</div>'
+        : '';
+      card.innerHTML =
+        '<div class="card-photo">' + photoHtml + '</div>' +
+        '<div class="card-body">' +
+          '<p class="card-cat">' + esc(r.category || "Autre") + ' · 🔗 · <span class="fam-link" data-fam-link>👪 ' + esc(famName) + '</span>' + famRegion + '</p>' +
+          '<h3 class="card-title">' + esc(r.title) + '</h3>' +
+          tagsHtml +
+        '</div>';
+      card.addEventListener("click", function(){ window.open(r.source_url, "_blank", "noopener"); });
+      card.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); window.open(r.source_url, "_blank", "noopener"); } });
+      card.style.setProperty("--cat-color", categoryColor(r.category));
+      var famLink = card.querySelector("[data-fam-link]");
+      if (famLink && r.family_id){
+        famLink.addEventListener("click", function(e){
+          e.stopPropagation();
+          openFamilyProfile(r.family_id, famName, r.families ? r.families.region : "");
+        });
+      }
+      els.quebecGrid.appendChild(card);
+    });
+  }
+
+  function switchDiscoverSub(sub){
+    state.discoverSubView = sub;
+    document.querySelectorAll(".discover-subtab").forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-discover-sub") === sub);
+    });
+    if (els.discoverQuebecView) els.discoverQuebecView.hidden = sub !== "quebec";
+    if (els.discoverTousView) els.discoverTousView.hidden = sub !== "tous";
+    if (sub === "quebec"){
+      renderQuebecMap();
+      loadDiscoverSidebar();
+      loadQuebecBookmarks();
+      loadFollowedRecipes();
+    } else {
+      renderDiscoverFilters();
+      renderDiscoverGrid();
+      loadDiscoverRecipes();
+    }
+  }
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest ? e.target.closest("[data-discover-sub]") : null;
+    if (btn) switchDiscoverSub(btn.getAttribute("data-discover-sub"));
+  });
 
   function renderFamilySearchResults(rows){
     if (!rows.length){ els.familySearchResults.innerHTML = '<p class="hint">Aucune famille trouvée avec ce nom.</p>'; return; }
@@ -1012,23 +1098,72 @@
     });
   }
 
+  var lastSidebarFamilies = [];
   function loadDiscoverSidebar(){
     if (!supabase || !els.discoverSidebarList) return;
     supabase.rpc("search_families", { query: "" }).then(function(res){
       if (res.error){ els.discoverSidebarList.innerHTML = '<p class="hint">Impossible de charger.</p>'; return; }
-      var rows = (res.data || []).filter(function(f){ return f.id !== state.familyId; });
-      rows.sort(function(a,b){ return a.name.localeCompare(b.name); });
-      if (!rows.length){ els.discoverSidebarList.innerHTML = '<p class="hint">Aucune autre famille inscrite pour l\'instant.</p>'; return; }
-      els.discoverSidebarList.innerHTML = rows.map(function(f){
-        return '<button type="button" class="discover-sidebar-item" data-sidebar-fam="' + f.id + '" data-sidebar-fam-name="' + esc(f.name) + '" data-sidebar-fam-region="' + esc(f.region || "") + '" data-sidebar-fam-admin="' + !!f.is_admin_family + '">' +
-          '<span class="fam-result-name">👪 ' + esc(f.name) + (f.is_admin_family ? ' <span class="fam-verified-badge" title="Famille officielle">✅</span>' : '') + '</span>' +
-          (f.region ? '<span class="fam-result-region">📍 ' + esc(f.region) + '</span>' : '') +
-        '</button>';
-      }).join("");
-      els.discoverSidebarList.querySelectorAll("[data-sidebar-fam]").forEach(function(btn){
-        btn.addEventListener("click", function(){
-          openFamilyProfile(btn.getAttribute("data-sidebar-fam"), btn.getAttribute("data-sidebar-fam-name"), btn.getAttribute("data-sidebar-fam-region"), btn.getAttribute("data-sidebar-fam-admin"));
-        });
+      lastSidebarFamilies = (res.data || []).filter(function(f){ return f.id !== state.familyId; });
+      renderDiscoverSidebarList();
+    });
+  }
+  function renderDiscoverSidebarList(){
+    var rows = lastSidebarFamilies.slice();
+    if (state.quebecMapRegion) rows = rows.filter(function(f){ return f.region === state.quebecMapRegion; });
+    rows.sort(function(a,b){ return a.name.localeCompare(b.name); });
+    if (!rows.length){
+      els.discoverSidebarList.innerHTML = state.quebecMapRegion
+        ? '<p class="hint">Aucune famille inscrite dans cette région pour l\'instant.</p>'
+        : '<p class="hint">Aucune autre famille inscrite pour l\'instant.</p>';
+      return;
+    }
+    els.discoverSidebarList.innerHTML = rows.map(function(f){
+      return '<button type="button" class="discover-sidebar-item" data-sidebar-fam="' + f.id + '" data-sidebar-fam-name="' + esc(f.name) + '" data-sidebar-fam-region="' + esc(f.region || "") + '" data-sidebar-fam-admin="' + !!f.is_admin_family + '">' +
+        '<span class="fam-result-name">👪 ' + esc(f.name) + (f.is_admin_family ? ' <span class="fam-verified-badge" title="Famille officielle">✅</span>' : '') + '</span>' +
+        (f.region ? '<span class="fam-result-region">📍 ' + esc(f.region) + '</span>' : '') +
+      '</button>';
+    }).join("");
+    els.discoverSidebarList.querySelectorAll("[data-sidebar-fam]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        openFamilyProfile(btn.getAttribute("data-sidebar-fam"), btn.getAttribute("data-sidebar-fam-name"), btn.getAttribute("data-sidebar-fam-region"), btn.getAttribute("data-sidebar-fam-admin"));
+      });
+    });
+  }
+
+  /* ================= CARTE INTERACTIVE DU QUÉBEC ================= */
+  var QUEBEC_MAP_REGIONS = [
+    { name: "Nord-du-Québec", col: "1 / 6", row: "1" },
+    { name: "Côte-Nord", col: "6 / 8", row: "1 / 3" },
+    { name: "Abitibi-Témiscamingue", col: "1 / 3", row: "2" },
+    { name: "Saguenay–Lac-Saint-Jean", col: "3 / 6", row: "2" },
+    { name: "Outaouais", col: "1 / 2", row: "3" },
+    { name: "Laurentides", col: "2 / 3", row: "3" },
+    { name: "Mauricie", col: "3 / 4", row: "3" },
+    { name: "Capitale-Nationale", col: "4 / 6", row: "3" },
+    { name: "Bas-Saint-Laurent", col: "6 / 7", row: "3" },
+    { name: "Lanaudière", col: "2 / 3", row: "4" },
+    { name: "Centre-du-Québec", col: "3 / 4", row: "4" },
+    { name: "Chaudière-Appalaches", col: "4 / 6", row: "4" },
+    { name: "Gaspésie–Îles-de-la-Madeleine", col: "6 / 7", row: "4" },
+    { name: "Laval", col: "2 / 3", row: "5" },
+    { name: "Montréal", col: "2 / 3", row: "6" },
+    { name: "Montérégie", col: "3 / 4", row: "5 / 7" },
+    { name: "Estrie", col: "4 / 5", row: "5 / 7" }
+  ];
+  function renderQuebecMap(){
+    var mapEl = document.getElementById("quebecMap");
+    if (!mapEl) return;
+    mapEl.innerHTML = QUEBEC_MAP_REGIONS.map(function(r){
+      var active = state.quebecMapRegion === r.name;
+      return '<button type="button" class="qc-region' + (active ? ' active' : '') + '" style="grid-column:' + r.col + ';grid-row:' + r.row + ';" data-qc-region="' + esc(r.name) + '" title="' + esc(r.name) + '"></button>';
+    }).join("");
+    mapEl.querySelectorAll("[data-qc-region]").forEach(function(btn){
+      btn.addEventListener("click", function(){
+        var region = btn.getAttribute("data-qc-region");
+        state.quebecMapRegion = (state.quebecMapRegion === region) ? "" : region;
+        renderQuebecMap();
+        renderDiscoverSidebarList();
+        renderQuebecGrid();
       });
     });
   }
@@ -1502,6 +1637,7 @@
     els.importError.hidden = true;
     if (els.importCat) els.importCat.value = "Autre";
     if (els.importTags) els.importTags.value = "";
+    if (els.importVisibility) els.importVisibility.value = "private";
     els.importOverlay.hidden = false;
     els.importSourceUrl.focus();
   });
@@ -1520,6 +1656,7 @@
     }
     var chosenCat = els.importCat ? els.importCat.value : "Autre";
     var chosenTags = els.importTags ? els.importTags.value.split(",").map(function(s){ return s.trim(); }).filter(Boolean) : [];
+    var chosenVisibility = els.importVisibility ? els.importVisibility.value : "private";
     els.importAnalyze.disabled = true;
     els.importAnalyze.textContent = "Importation…";
 
@@ -1545,7 +1682,7 @@
           steps: [],
           source_url: sourceUrl,
           photo_url: photoUrl,
-          visibility: "private",
+          visibility: chosenVisibility,
           is_bookmark: true,
           family_id: state.familyId,
           created_by: state.session.user.id
@@ -1585,8 +1722,8 @@
     els.featuredSection.hidden = recipeMode ? els.featuredSection.hidden : true;
     els.memoryBanner.hidden = recipeMode ? els.memoryBanner.hidden : true;
 
-    els.discoverGrid.hidden = !discoverMode;
-    if (els.discoverLayout) els.discoverLayout.hidden = !discoverMode;
+    if (els.discoverWrap) els.discoverWrap.hidden = !discoverMode;
+    els.searchInput.parentNode.style.display = (recipeMode || (discoverMode && state.discoverSubView === "tous")) ? "" : "none";
     if (!discoverMode && els.discoverFilters) els.discoverFilters.hidden = true;
     els.discoverEmptyState.hidden = discoverMode ? !!state.discoverRecipes.length : true;
 
@@ -1601,7 +1738,7 @@
       : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg> Ajouter une recette';
 
     if (recipeMode){ renderGrid(); renderFeatured(); }
-    else if (discoverMode){ renderDiscoverFilters(); renderDiscoverGrid(); loadDiscoverRecipes(); loadDiscoverSidebar(); loadFollowedRecipes(); }
+    else if (discoverMode){ switchDiscoverSub(state.discoverSubView || "quebec"); }
     else if (plannerMode){ renderPlanner(); loadMealPlan(); }
     else { renderBlogList(); loadBlogPosts(); }
   }
@@ -2060,6 +2197,7 @@
   function filteredSortedDiscoverRecipes(){
     var term = state.searchTerm.trim().toLowerCase();
     var list = state.discoverRecipes.filter(function(r){
+      if (state.discoverCategory && r.category !== state.discoverCategory) return false;
       if (state.discoverRegion && (!r.families || r.families.region !== state.discoverRegion)) return false;
       if (state.discoverTag && (!r.tags || r.tags.indexOf(state.discoverTag) === -1)) return false;
       if (term){
@@ -2100,6 +2238,10 @@
 
     els.discoverFilters.innerHTML =
       '<div class="discover-filters-row">' +
+        '<select id="discoverCatSelect">' +
+          '<option value="">Toutes les catégories</option>' +
+          CATEGORIES.map(function(c){ return '<option value="' + esc(c) + '"' + (state.discoverCategory === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join("") +
+        '</select>' +
         '<select id="discoverRegionSelect">' +
           '<option value="">Toutes les régions</option>' +
           regions.map(function(r){ return '<option value="' + esc(r) + '"' + (state.discoverRegion === r ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join("") +
@@ -2118,6 +2260,10 @@
           '</div>'
         : '');
 
+    document.getElementById("discoverCatSelect").addEventListener("change", function(e){
+      state.discoverCategory = e.target.value;
+      renderDiscoverGrid();
+    });
     document.getElementById("discoverRegionSelect").addEventListener("change", function(e){
       state.discoverRegion = e.target.value;
       renderDiscoverGrid();
