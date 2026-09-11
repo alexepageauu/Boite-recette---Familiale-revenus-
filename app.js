@@ -988,8 +988,7 @@
   function loadQuebecBookmarks(){
     if (!supabase) return;
     supabase.from("recipes").select("*, families(name, region)")
-      .eq("is_bookmark", true)
-      .eq("visibility", "private")
+      .eq("visibility", "public")
       .order("created_at", { ascending: false })
       .then(function(res){
         if (res.error) return;
@@ -1025,12 +1024,12 @@
       card.innerHTML =
         '<div class="card-photo">' + photoHtml + '</div>' +
         '<div class="card-body">' +
-          '<p class="card-cat">' + esc(r.category || "Autre") + ' · 🔗 · <span class="fam-link" data-fam-link>👪 ' + esc(famName) + '</span>' + famRegion + '</p>' +
+          '<p class="card-cat">' + esc(r.category || "Autre") + ' · <span class="fam-link" data-fam-link>👪 ' + esc(famName) + '</span>' + famRegion + '</p>' +
           '<h3 class="card-title">' + esc(r.title) + '</h3>' +
           tagsHtml +
         '</div>';
-      card.addEventListener("click", function(){ window.open(r.source_url, "_blank", "noopener"); });
-      card.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); window.open(r.source_url, "_blank", "noopener"); } });
+      card.addEventListener("click", function(){ openDiscoverRecipeOrBookmark(r); });
+      card.addEventListener("keydown", function(e){ if (e.key === "Enter" || e.key === " "){ e.preventDefault(); openDiscoverRecipeOrBookmark(r); } });
       card.style.setProperty("--cat-color", categoryColor(r.category));
       var famLink = card.querySelector("[data-fam-link]");
       if (famLink && r.family_id){
@@ -2801,9 +2800,14 @@
 
   function loadDiscoverRecipes(){
     if (!supabase || !state.familyId) return;
-    supabase.from("recipes").select("*, families(name, region)").eq("visibility", "public").neq("family_id", state.familyId).then(function(res){
-      if (res.error){ toast("Impossible de charger Découvrir — " + res.error.message); return; }
-      state.discoverRecipes = sortByDate(res.data || []);
+    Promise.all([
+      supabase.from("recipes").select("*, families(name, region)").eq("visibility", "public").neq("family_id", state.familyId),
+      supabase.from("recipes").select("*, families(name, region)").eq("is_bookmark", true).eq("visibility", "private")
+    ]).then(function(results){
+      var res1 = results[0], res2 = results[1];
+      if (res1.error){ toast("Impossible de charger Découvrir — " + res1.error.message); return; }
+      var combined = (res1.data || []).concat(res2.error ? [] : (res2.data || []));
+      state.discoverRecipes = sortByDate(combined);
       if (state.view === "discover") renderDiscoverFilters();
       if (state.view === "discover") renderDiscoverGrid();
     });
