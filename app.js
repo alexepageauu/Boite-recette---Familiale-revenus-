@@ -1496,14 +1496,47 @@
       els.importError.hidden = false;
       return;
     }
-    closeImport();
-    openForm(null);
-    els["f-source"].value = sourceUrl;
-    updateBookmarkFieldVisibility();
-    els["f-is-bookmark"].checked = true;
-    updatePhotoFieldMode();
-    els["f-title"].focus();
-    toast("Lien importé — donne un titre à cette recette, puis enregistre.");
+    els.importAnalyze.disabled = true;
+    els.importAnalyze.textContent = "Importation…";
+
+    function fallbackTitle(){
+      try { return new URL(sourceUrl).hostname.replace(/^www\./, ""); }
+      catch (e) { return "Recette importée"; }
+    }
+
+    fetch("/api/link-preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sourceUrl })
+    }).then(function(res){ return res.json(); })
+      .catch(function(){ return {}; })
+      .then(function(preview){
+        var title = (preview && preview.title) ? preview.title : fallbackTitle();
+        var photoUrl = (preview && preview.image) ? preview.image : null;
+        supabase.from("recipes").insert({
+          title: title,
+          category: "Autre",
+          ingredients: [],
+          steps: [],
+          source_url: sourceUrl,
+          photo_url: photoUrl,
+          visibility: "private",
+          is_bookmark: true,
+          family_id: state.familyId,
+          created_by: state.session.user.id
+        }).then(function(res2){
+          els.importAnalyze.disabled = false;
+          els.importAnalyze.textContent = "Importer";
+          if (res2.error){
+            els.importError.textContent = "L'importation a échoué — " + res2.error.message;
+            els.importError.hidden = false;
+            return;
+          }
+          closeImport();
+          loadRecipes();
+          toast(photoUrl ? "Recette importée avec sa photo !" : "Recette importée ! (aucune photo trouvée sur la page)");
+        });
+      });
   });
 
   /* ================= BLOGUE NUTRITION ================= */
