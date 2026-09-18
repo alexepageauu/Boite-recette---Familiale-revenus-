@@ -1214,8 +1214,11 @@
   var notifTab = "received";
   function loadPendingCount(){
     if (!supabase || !state.session) return;
-    supabase.rpc("my_pending_request_count").then(function(res){
-      var n = res.data || 0;
+    Promise.all([
+      supabase.rpc("my_pending_request_count"),
+      supabase.rpc("my_unseen_response_count")
+    ]).then(function(results){
+      var n = (results[0].data || 0) + (results[1].data || 0);
       if (n > 0){ els.notifCount.hidden = false; els.notifCount.textContent = n; }
       else { els.notifCount.hidden = true; }
     });
@@ -1230,18 +1233,17 @@
       supabase.from("access_requests")
         .select("*, recipes(title), requester:requester_family_id(name)")
         .neq("requested_by", state.session.user.id)
+        .eq("status", "pending")
         .order("created_at", { ascending: false })
         .then(function(res){
           if (res.error){ els.notifBody.innerHTML = '<p class="hint">Impossible de charger les demandes.</p>'; return; }
           var rows = res.data || [];
-          if (!rows.length){ els.notifBody.innerHTML = '<p class="hint">Aucune demande reçue pour l\'instant.</p>'; return; }
+          if (!rows.length){ els.notifBody.innerHTML = '<p class="hint">Aucune demande en attente pour l\'instant.</p>'; return; }
           els.notifBody.innerHTML = rows.map(function(row){
             var famName = row.requester ? row.requester.name : "Une famille";
             var what = row.recipes ? "à <b>" + esc(row.recipes.title) + "</b>" : "une demande générale";
             var personalNote = row.target_user_id ? ' <span class="hint">(recette personnelle — envoyée à toi seul(e))</span>' : '';
-            var actions = row.status === "pending"
-              ? '<div class="notif-actions"><button class="btn btn-primary" data-approve="' + row.id + '" type="button">Approuver</button><button class="btn" data-decline="' + row.id + '" type="button">Refuser</button></div>'
-              : '<span class="notif-status ' + row.status + '">' + (row.status === "approved" ? "Approuvée" : "Refusée") + '</span>';
+            var actions = '<div class="notif-actions"><button class="btn btn-primary" data-approve="' + row.id + '" type="button">Approuver</button><button class="btn" data-decline="' + row.id + '" type="button">Refuser</button></div>';
             return '<div class="notif-item">' +
               '<p><b>' + esc(famName) + '</b> a demandé l\'accès ' + what + personalNote + '</p>' +
               (row.message ? '<p class="hint">« ' + esc(row.message) + ' »</p>' : '') +
@@ -1256,6 +1258,7 @@
           });
         });
     } else {
+      supabase.from("access_requests").update({ seen: true }).eq("requested_by", state.session.user.id).neq("status", "pending").then(loadPendingCount);
       supabase.from("access_requests")
         .select("*, recipes(title), target:target_family_id(name)")
         .eq("requested_by", state.session.user.id)
@@ -1268,8 +1271,9 @@
             var label = row.status === "pending" ? "En attente" : (row.status === "approved" ? "Approuvée" : "Refusée");
             var what = row.recipes ? esc(row.recipes.title) : "Demande générale";
             var toFam = row.target ? " à " + esc(row.target.name) : "";
+            var newBadge = (row.status !== "pending" && !row.seen) ? ' <span class="notif-new-badge">Nouveau</span>' : '';
             return '<div class="notif-item">' +
-              '<p>' + what + toFam + '</p>' +
+              '<p>' + what + toFam + newBadge + '</p>' +
               '<span class="notif-status ' + row.status + '">' + label + '</span>' +
             '</div>';
           }).join("");
@@ -1283,7 +1287,8 @@
       var proceed = function(){
         supabase.from("access_requests").update({
           status: approve ? "approved" : "declined",
-          responded_at: new Date().toISOString()
+          responded_at: new Date().toISOString(),
+          seen: false
         }).eq("id", requestId).then(function(res2){
           if (res2.error){ toast("Une erreur est survenue."); return; }
           toast(approve ? "Accès accordé !" : "Demande refusée.");
@@ -1295,7 +1300,13 @@
         supabase.from("recipe_shares").upsert({
           recipe_id: res.data.recipe_id,
           shared_with_user_id: res.data.requested_by
-        }, { onConflict: "recipe_id,shared_with_user_id" }).then(proceed);
+        }, { onConflict: "recipe_id,shared_with_user_id" }).then(function(res3){
+          if (res3.error){
+            toast("L'accès n'a pas pu être accordé — " + res3.error.message);
+            return;
+          }
+          proceed();
+        });
       } else {
         proceed();
       }
@@ -2293,12 +2304,14 @@
     els.discoverGrid.innerHTML = "";
     var list = filteredSortedDiscoverRecipes();
     if (!list.length){
+      els.discoverGrid.hidden = true;
       els.discoverEmptyState.hidden = false;
       els.discoverEmptyState.querySelector("p.display").textContent = state.discoverRecipes.length
         ? "Aucun résultat avec ces filtres"
         : "Rien à découvrir pour l'instant";
       return;
     }
+    els.discoverGrid.hidden = false;
     els.discoverEmptyState.hidden = true;
     list.forEach(function(r){
       var card = document.createElement("div");

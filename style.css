@@ -130,6 +130,7 @@ img{ max-width:100%; }
 .notif-item p{ margin:0 0 6px; font-size:13.5px; }
 .notif-item .notif-actions{ display:flex; gap:8px; margin-top:8px; }
 .notif-status{ font-family:"IBM Plex Mono",monospace; font-size:11px; text-transform:uppercase; padding:2px 8px; border-radius:999px; }
+.notif-new-badge{ background:var(--accent); color:#fff; font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; text-transform:uppercase; }
 .notif-status.pending{ background:var(--surface-2); color:var(--accent-deep); }
 .notif-status.approved{ background:var(--pine); color:#fff; }
 .notif-status.declined{ background:var(--danger); color:#fff; }
