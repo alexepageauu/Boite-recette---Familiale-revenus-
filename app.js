@@ -29,6 +29,8 @@
    "f-cook","f-ingredients","f-steps","f-author","formCancel","formSubmit",
    "confirmOverlay","confirmClose","confirmDeleteBtn","confirmCancelBtn","toast",
    "authWidget","authOpenBtn","authOverlay","authClose","authHeading","authForm","authError",
+   "authPasswordField","authForgotLink","authForgotBtn",
+   "resetPasswordOverlay","resetPasswordForm","resetPasswordError","resetPasswordSubmit","new-password",
    "authNameField","a-name","a-email","a-password","authSubmit","authHint","authTabLogin","authTabSignup",
    "cookOverlay","cookSheet","viewSwitch","importBtn","importOverlay","importClose","importSourceUrl","importCancel","importAnalyze","importError","importCat","importTags","importVisibility",
    "blogList","blogEmptyState","blogFormOverlay","blogFormHeading","blogFormClose","blogForm","blogFormError",
@@ -2020,14 +2022,24 @@
     state.authMode = mode;
     els.authTabLogin.classList.toggle("active", mode === "login");
     els.authTabSignup.classList.toggle("active", mode === "signup");
-    els.authHeading.textContent = mode === "login" ? "Se connecter" : "Créer un compte";
-    els.authSubmit.textContent = mode === "login" ? "Se connecter" : "Créer mon compte";
+    els.authTabLogin.hidden = mode === "reset";
+    els.authTabSignup.hidden = mode === "reset";
+    els.authPasswordField.hidden = mode === "reset";
+    els.authForgotLink.hidden = mode !== "login";
+    els.authHeading.textContent = mode === "login" ? "Se connecter" : mode === "signup" ? "Créer un compte" : "Réinitialiser le mot de passe";
+    els.authSubmit.textContent = mode === "login" ? "Se connecter" : mode === "signup" ? "Créer mon compte" : "Envoyer le lien de réinitialisation";
     els.authNameField.hidden = mode !== "signup";
-    els.authHint.textContent = mode === "login" ? "" : "Utilisé pour signer tes recettes.";
+    els.authHint.textContent = mode === "signup" ? "Utilisé pour signer tes recettes." : "";
     els.authError.hidden = true;
   }
   els.authTabLogin.addEventListener("click", function(){ setAuthMode("login"); });
   els.authTabSignup.addEventListener("click", function(){ setAuthMode("signup"); });
+  if (els.authForgotBtn){
+    els.authForgotBtn.addEventListener("click", function(e){
+      e.preventDefault();
+      setAuthMode("reset");
+    });
+  }
 
   function openAuth(mode){
     setAuthMode(mode || "login");
@@ -2047,6 +2059,22 @@
     var password = els["a-password"].value;
     var name = els["a-name"].value.trim();
     els.authSubmit.disabled = true;
+
+    if (state.authMode === "reset"){
+      supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname
+      }).then(function(res){
+        els.authSubmit.disabled = false;
+        if (res.error){
+          els.authError.textContent = res.error.message;
+          els.authError.hidden = false;
+          return;
+        }
+        toast("Courriel envoyé ! Vérifie ta boîte de réception (et tes indésirables) pour le lien de réinitialisation.");
+        setAuthMode("login");
+      });
+      return;
+    }
 
     var action = state.authMode === "login"
       ? supabase.auth.signInWithPassword({ email: email, password: password })
@@ -2068,6 +2096,26 @@
       toast("Connecté(e).");
     });
   });
+
+  if (els.resetPasswordForm){
+    els.resetPasswordForm.addEventListener("submit", function(e){
+      e.preventDefault();
+      if (!supabase) return;
+      els.resetPasswordError.hidden = true;
+      var newPassword = els["new-password"].value;
+      els.resetPasswordSubmit.disabled = true;
+      supabase.auth.updateUser({ password: newPassword }).then(function(res){
+        els.resetPasswordSubmit.disabled = false;
+        if (res.error){
+          els.resetPasswordError.textContent = res.error.message;
+          els.resetPasswordError.hidden = false;
+          return;
+        }
+        els.resetPasswordOverlay.hidden = true;
+        toast("Mot de passe mis à jour ! Tu es maintenant connecté(e).");
+      });
+    });
+  }
 
   /* ---------------- famille (VERSION 2) ---------------- */
   function setFamTab(mode){
@@ -2873,6 +2921,11 @@
     supabase.auth.onAuthStateChange(function(_event, session){
       state.session = session;
       renderAuthWidget();
+      if (_event === "PASSWORD_RECOVERY"){
+        els.authOverlay.hidden = true;
+        els.resetPasswordOverlay.hidden = false;
+        return;
+      }
       if (!session){
         state.showFavoritesOnly = false;
         state.familyId = null;
