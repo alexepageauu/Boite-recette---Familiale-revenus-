@@ -203,7 +203,7 @@
       card.tabIndex = 0;
       card.setAttribute("role", "button");
 
-      var photoHtml = (r.photo_url && (!r.is_bookmark || isOwnUploadedPhoto(r.photo_url)))
+      var photoHtml = r.photo_url
         ? '<img src="' + esc(r.photo_url) + '" alt="" loading="lazy">'
         : '<span class="ph-fallback">' + esc(initialsWord(r.title)) + '</span>';
 
@@ -309,7 +309,7 @@
       return;
     }
     var r = state.recipes[0];
-    var photoHtml = (r.photo_url && (!r.is_bookmark || isOwnUploadedPhoto(r.photo_url))) ? '<img src="' + esc(r.photo_url) + '" alt="">' : '';
+    var photoHtml = r.photo_url ? '<img src="' + esc(r.photo_url) + '" alt="">' : '';
     els.featuredSection.innerHTML =
       '<div class="featured-photo">' + photoHtml + '</div>' +
       '<div class="featured-overlay">' +
