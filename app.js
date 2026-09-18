@@ -99,6 +99,10 @@
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 
+  function isOwnUploadedPhoto(url){
+    return !!(url && typeof SUPABASE_URL === "string" && url.indexOf(SUPABASE_URL) === 0);
+  }
+
   function esc(s){
     return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
       return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
@@ -199,7 +203,7 @@
       card.tabIndex = 0;
       card.setAttribute("role", "button");
 
-      var photoHtml = r.photo_url
+      var photoHtml = (r.photo_url && (!r.is_bookmark || isOwnUploadedPhoto(r.photo_url)))
         ? '<img src="' + esc(r.photo_url) + '" alt="" loading="lazy">'
         : '<span class="ph-fallback">' + esc(initialsWord(r.title)) + '</span>';
 
@@ -305,7 +309,7 @@
       return;
     }
     var r = state.recipes[0];
-    var photoHtml = r.photo_url ? '<img src="' + esc(r.photo_url) + '" alt="">' : '';
+    var photoHtml = (r.photo_url && (!r.is_bookmark || isOwnUploadedPhoto(r.photo_url))) ? '<img src="' + esc(r.photo_url) + '" alt="">' : '';
     els.featuredSection.innerHTML =
       '<div class="featured-photo">' + photoHtml + '</div>' +
       '<div class="featured-overlay">' +
@@ -1524,6 +1528,10 @@
     var steps = els["f-steps"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
     var sourceVal = els["f-source"].value.trim();
     if (!title) return;
+    if (!sourceVal){
+      showFormError("Indique la provenance de la recette (un lien, ou une description comme « Recette personnelle »).");
+      return;
+    }
 
     var data = {
       title: title,
@@ -2264,19 +2272,16 @@
           '<option value="">Toutes les régions</option>' +
           regions.map(function(r){ return '<option value="' + esc(r) + '"' + (state.discoverRegion === r ? ' selected' : '') + '>' + esc(r) + '</option>'; }).join("") +
         '</select>' +
+        '<select id="discoverTagSelect">' +
+          '<option value="">Toutes les étiquettes</option>' +
+          tags.map(function(t){ return '<option value="' + esc(t) + '"' + (state.discoverTag === t ? ' selected' : '') + '>' + esc(t) + '</option>'; }).join("") +
+        '</select>' +
         '<select id="discoverSortSelect">' +
           '<option value="recent"' + (state.discoverSort === "recent" ? ' selected' : '') + '>Plus récentes</option>' +
           '<option value="title_az"' + (state.discoverSort === "title_az" ? ' selected' : '') + '>Titre A-Z</option>' +
           '<option value="family_az"' + (state.discoverSort === "family_az" ? ' selected' : '') + '>Famille A-Z</option>' +
         '</select>' +
-      '</div>' +
-      (tags.length
-        ? '<div class="discover-tag-row">' +
-            tags.map(function(t){
-              return '<button type="button" class="tag-filter-pill' + (state.discoverTag === t ? ' active' : '') + '" data-tag-filter="' + esc(t) + '">' + esc(t) + '</button>';
-            }).join("") +
-          '</div>'
-        : '');
+      '</div>';
 
     document.getElementById("discoverCatSelect").addEventListener("change", function(e){
       state.discoverCategory = e.target.value;
@@ -2286,17 +2291,13 @@
       state.discoverRegion = e.target.value;
       renderDiscoverGrid();
     });
+    document.getElementById("discoverTagSelect").addEventListener("change", function(e){
+      state.discoverTag = e.target.value;
+      renderDiscoverGrid();
+    });
     document.getElementById("discoverSortSelect").addEventListener("change", function(e){
       state.discoverSort = e.target.value;
       renderDiscoverGrid();
-    });
-    els.discoverFilters.querySelectorAll("[data-tag-filter]").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        var t = btn.getAttribute("data-tag-filter");
-        state.discoverTag = (state.discoverTag === t) ? "" : t;
-        renderDiscoverFilters();
-        renderDiscoverGrid();
-      });
     });
   }
 

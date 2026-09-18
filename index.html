@@ -7,7 +7,7 @@
 <meta name="description" content="Le carnet de recettes de la famille : ajoutez, retrouvez et partagez vos recettes préférées avec photos, ingrédients et étapes.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🗃️%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Caveat:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Public+Sans:wght@400;500;600;700&family=Caveat:wght@500;600;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -56,10 +56,10 @@
 
 <div class="controls-wrap" id="controlsWrap" hidden>
   <div class="view-switch" id="viewSwitch">
-    <button class="view-btn active" data-view="recipes" type="button">🍽️ Mes recettes</button>
-    <button class="view-btn" data-view="planner" type="button">🛒 Liste d'épicerie</button>
+    <button class="view-btn active" data-view="recipes" type="button">Mes recettes</button>
+    <button class="view-btn" data-view="planner" type="button">Liste d'épicerie</button>
     <button class="view-btn" data-view="discover" type="button">🌐 Découvrir</button>
-    <button class="view-btn" data-view="blog" type="button">📰 Blogue</button>
+    <button class="view-btn" data-view="blog" type="button">Blogue</button>
   </div>
   <div class="controls">
     <div class="tabs" id="tabs"></div>
@@ -209,12 +209,12 @@
 
       <div class="field">
         <label for="f-ingredients">Ingrédients <span class="hint">— un par ligne</span></label>
-        <textarea id="f-ingredients" required placeholder="500 g de farine&#10;2 oeufs&#10;250 ml de lait"></textarea>
+        <textarea id="f-ingredients" placeholder="500 g de farine&#10;2 oeufs&#10;250 ml de lait"></textarea>
       </div>
 
       <div class="field">
         <label for="f-steps">Étapes <span class="hint">— une par ligne</span></label>
-        <textarea id="f-steps" required placeholder="Préchauffer le four à 180°C&#10;Mélanger les ingrédients secs&#10;..."></textarea>
+        <textarea id="f-steps" placeholder="Préchauffer le four à 180°C&#10;Mélanger les ingrédients secs&#10;..."></textarea>
       </div>
 
       <div class="field">
@@ -227,7 +227,7 @@
           <button type="button" class="info-toggle" id="sourceInfoBtn" aria-label="Plus d'info">ⓘ</button>
         </label>
         <p class="hint" id="sourceInfoText" hidden>D'où vient cette recette? Par exemple : le lien du site web où tu l'as trouvée, « Livre de recettes de mémé », ou simplement « Recette personnelle » si tu l'as inventée. Ça aide à savoir qui remercier, et à respecter le droit d'auteur si jamais tu veux la rendre publique un jour.</p>
-        <input type="text" id="f-source" placeholder="Ex. https://... , ou « Livre de recettes de mémé », « Recette personnelle »">
+        <input type="text" id="f-source" required placeholder="Ex. https://... , ou « Livre de recettes de mémé », « Recette personnelle »">
       </div>
 
       <div class="field">
