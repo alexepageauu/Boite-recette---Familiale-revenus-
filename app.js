@@ -2025,6 +2025,7 @@
     els.authTabLogin.hidden = mode === "reset";
     els.authTabSignup.hidden = mode === "reset";
     els.authPasswordField.hidden = mode === "reset";
+    els["a-password"].required = mode !== "reset";
     els.authForgotLink.hidden = mode !== "login";
     els.authHeading.textContent = mode === "login" ? "Se connecter" : mode === "signup" ? "Créer un compte" : "Réinitialiser le mot de passe";
     els.authSubmit.textContent = mode === "login" ? "Se connecter" : mode === "signup" ? "Créer mon compte" : "Envoyer le lien de réinitialisation";
@@ -2072,6 +2073,10 @@
         }
         toast("Courriel envoyé ! Vérifie ta boîte de réception (et tes indésirables) pour le lien de réinitialisation.");
         setAuthMode("login");
+      }).catch(function(err){
+        els.authSubmit.disabled = false;
+        els.authError.textContent = "Une erreur inattendue est survenue — " + (err && err.message ? err.message : "réessaie.");
+        els.authError.hidden = false;
       });
       return;
     }
