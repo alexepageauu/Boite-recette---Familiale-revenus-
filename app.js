@@ -394,7 +394,6 @@
     var actionsHtml = state.session
       ? '<div class="detail-actions">' +
           '<button class="btn" data-edit type="button">Modifier</button>' +
-          '<button class="btn" data-add-planner type="button">📅 Ajouter au planificateur</button>' +
           (!isPersonal ? '<button class="btn" data-toggle-visibility type="button">' + (isPublic ? "🔒 Rendre privée" : "🌐 Rendre publique") + '</button>' : '') +
           '<button class="btn btn-danger" data-delete type="button">Supprimer</button>' +
         '</div>'
@@ -1166,6 +1165,15 @@
       });
     });
   }
+  var regionToggleBtn = document.getElementById("regionToggleBtn");
+  if (regionToggleBtn){
+    regionToggleBtn.addEventListener("click", function(){
+      var mapEl = document.getElementById("quebecMap");
+      var arrow = document.getElementById("regionToggleArrow");
+      mapEl.hidden = !mapEl.hidden;
+      arrow.textContent = mapEl.hidden ? "▾" : "▴";
+    });
+  }
 
   /* ================= DEMANDER L'ACCÈS ================= */
 
@@ -1504,11 +1512,7 @@
     var ingredients = els["f-ingredients"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
     var steps = els["f-steps"].value.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
     var sourceVal = els["f-source"].value.trim();
-    if (!title || !ingredients.length || !steps.length) return;
-    if (!sourceVal){
-      showFormError("Indique la provenance de la recette (un lien, ou une description comme « Recette personnelle »).");
-      return;
-    }
+    if (!title) return;
 
     var data = {
       title: title,
@@ -1695,7 +1699,11 @@
           }
           closeImport();
           loadRecipes();
-          toast(photoUrl ? "Recette importée avec sa photo !" : "Recette importée ! (aucune photo trouvée sur la page)");
+          if (photoUrl && title !== fallbackTitle()){
+            toast("✨ Recette importée avec son titre et sa photo !");
+          } else {
+            toast("Recette ajoutée, mais ce site n'a rien laissé récupérer (titre/photo) — il bloque probablement les visites automatisées. Modifie la fiche pour ajuster toi-même.");
+          }
         });
       });
   });
@@ -1738,7 +1746,7 @@
 
     if (recipeMode){ renderGrid(); renderFeatured(); }
     else if (discoverMode){ switchDiscoverSub(state.discoverSubView || "quebec"); }
-    else if (plannerMode){ renderPlanner(); loadMealPlan(); }
+    else if (plannerMode){ renderPlanner(); loadGroceryChecks(); }
     else { renderBlogList(); loadBlogPosts(); }
   }
   els.viewSwitch.querySelectorAll(".view-btn").forEach(function(b){
@@ -2593,31 +2601,30 @@
   function renderGroceryList(){
     var listEl = els.plannerView.querySelector("#groceryList");
     if (!listEl) return;
-    var recipeItems = currentWeekIngredients();
-    var manualItems = state.manualGroceryItems.map(function(key){ return { key: key, label: key, manual: true }; });
-    var items = recipeItems.concat(manualItems);
+    var items = state.manualGroceryItems.map(function(key){ return { key: key, label: key }; });
 
     var itemsHtml = items.length
       ? items.map(function(it){
-          var checked = !!state.groceryChecks[it.key];
-          return '<label class="grocery-item' + (checked ? ' checked' : '') + '">' +
-            '<input type="checkbox" data-grocery-key="' + esc(it.key) + '"' + (checked ? ' checked' : '') + '>' +
+          return '<label class="grocery-item">' +
+            '<input type="checkbox" data-grocery-key="' + esc(it.key) + '">' +
             '<span>' + esc(it.label) + '</span>' +
-            (it.manual ? '<button type="button" class="grocery-remove" data-grocery-remove="' + esc(it.key) + '" title="Retirer">&times;</button>' : '') +
+            '<button type="button" class="grocery-remove" data-grocery-remove="' + esc(it.key) + '" title="Retirer">&times;</button>' +
             '</label>';
         }).join("")
-      : '<p class="hint">Assigne des recettes à la semaine pour générer la liste automatiquement.</p>';
+      : '<p class="hint">Liste vide pour l\'instant — ajoute un item ci-dessous.</p>';
 
     listEl.innerHTML = itemsHtml +
       '<div class="grocery-add-row">' +
-        '<input type="text" id="groceryAddInput" placeholder="Ajouter un item (ex. papier de toilette)…">' +
+        '<input type="text" id="groceryAddInput" placeholder="Ajouter un item (ex. lait, papier de toilette)…">' +
         '<button type="button" class="btn" id="groceryAddBtn">+ Ajouter</button>' +
       '</div>';
 
     listEl.querySelectorAll("[data-grocery-key]").forEach(function(cb){
       cb.addEventListener("change", function(){
-        cb.closest(".grocery-item").classList.toggle("checked", cb.checked);
-        toggleGroceryCheck(cb.getAttribute("data-grocery-key"), cb.checked);
+        if (cb.checked){
+          cb.closest(".grocery-item").classList.add("checked");
+          removeManualGroceryItem(cb.getAttribute("data-grocery-key"));
+        }
       });
     });
     listEl.querySelectorAll("[data-grocery-remove]").forEach(function(btn){
@@ -2637,12 +2644,9 @@
   }
 
   function exportGroceryList(){
-    var recipeItems = currentWeekIngredients();
-    var manualItems = state.manualGroceryItems.map(function(key){ return { key: key, label: key }; });
-    var items = recipeItems.concat(manualItems).filter(function(it){ return !state.groceryChecks[it.key]; });
-    var days = currentWeekDates();
-    var title = "Liste d'épicerie — " + days[0].getDate() + " " + MONTH_SHORT[days[0].getMonth()] + " au " + days[6].getDate() + " " + MONTH_SHORT[days[6].getMonth()];
-    if (!items.length){ toast("Rien à imprimer — tout est déjà coché, ou la liste est vide."); return; }
+    var items = state.manualGroceryItems.map(function(key){ return { key: key, label: key }; });
+    var title = "Liste d'épicerie";
+    if (!items.length){ toast("Rien à imprimer — la liste est vide."); return; }
     var html = "<!doctype html><html><head><meta charset='utf-8'><title>" + title + "</title>" +
       "<style>body{font-family:Georgia,'Times New Roman',serif;padding:40px;max-width:520px;margin:0 auto;color:#23302a;}" +
       "h1{font-size:21px;border-bottom:2px solid #23302a;padding-bottom:12px;}" +
@@ -2664,23 +2668,8 @@
 
   function renderPlanner(){
     if (!els.plannerView) return;
-    var sub = state.plannerSubView || "horaire";
-    els.plannerView.innerHTML =
-      '<div class="planner-subtabs">' +
-        '<button type="button" class="planner-subtab' + (sub === "horaire" ? ' active' : '') + '" data-planner-sub="horaire">📅 Horaire de la semaine</button>' +
-        '<button type="button" class="planner-subtab' + (sub === "epicerie" ? ' active' : '') + '" data-planner-sub="epicerie">🛒 Liste d\'épicerie</button>' +
-      '</div>' +
-      '<div class="planner-content" id="plannerContent"></div>';
-
-    els.plannerView.querySelectorAll("[data-planner-sub]").forEach(function(btn){
-      btn.addEventListener("click", function(){
-        state.plannerSubView = btn.getAttribute("data-planner-sub");
-        renderPlanner();
-      });
-    });
-
-    if (sub === "epicerie") renderPlannerGrocery();
-    else renderPlannerSchedule();
+    els.plannerView.innerHTML = '<div class="planner-content" id="plannerContent"></div>';
+    renderPlannerGrocery();
   }
 
   function renderPlannerSchedule(){
@@ -2773,8 +2762,9 @@
     if (!content) return;
     content.innerHTML =
       '<div class="grocery-section">' +
-        '<div class="grocery-header"><p class="detail-h" style="margin:0;">🛒 Liste d\'épicerie de la semaine</p>' +
+        '<div class="grocery-header"><p class="detail-h" style="margin:0;">🛒 Liste d\'épicerie de la famille</p>' +
         '<button class="btn" id="groceryExportBtn" type="button">🖨️ Imprimer / PDF</button></div>' +
+        '<p class="hint" style="margin:0 0 16px;">Partagée en temps réel avec toute ta famille — coche un item pour le faire disparaître.</p>' +
         '<div class="grocery-list" id="groceryList"><p class="hint">Chargement…</p></div>' +
       '</div>';
     content.querySelector("#groceryExportBtn").addEventListener("click", exportGroceryList);
@@ -2824,6 +2814,11 @@
     supabase.channel("blog-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "blog_posts" }, function(){
         loadBlogPosts();
+      })
+      .subscribe();
+    supabase.channel("grocery-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "grocery_checks" }, function(){
+        loadGroceryChecks();
       })
       .subscribe();
     supabase.channel("comments-changes")
